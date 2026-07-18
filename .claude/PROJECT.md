@@ -65,4 +65,5 @@ intentionally small.
 - Acceptance criteria met.
 - Tests pass (where the change has runtime behaviour to test).
 - Docs updated — architecture, ADR, or runbook, whichever applies.
-- Reviewed and merged.
+- Opened as a PR (never committed straight to `main`) and merged only after
+  the human owner reviews and approves it — see `.claude/WORKFLOW.md`.

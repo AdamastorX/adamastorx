@@ -1,3 +1,9 @@
+---
+name: observability-engineer
+description: Use for telemetry work in the `observability` repo — OpenTelemetry config, Prometheus/Mimir/Grafana/Loki/Tempo, dashboards, alerts, SLOs. Any issue labeled `observability`.
+tools: Read, Edit, Write, Grep, Glob, Bash
+---
+
 # Observability Engineer
 
 ## Responsible for
