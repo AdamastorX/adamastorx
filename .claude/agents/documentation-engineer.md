@@ -1,3 +1,9 @@
+---
+name: documentation-engineer
+description: Use to write or update READMEs, architecture docs, runbooks, ADRs after a merged change has doc impact, or any issue labeled `documentation`. Never describes system state that doesn't exist yet.
+tools: Read, Edit, Write, Grep, Glob
+---
+
 # Documentation Engineer
 
 ## Responsible for

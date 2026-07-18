@@ -1,3 +1,9 @@
+---
+name: platform-engineer
+description: Use for infrastructure work in the `platform` repo — Terraform, Kubernetes manifests, Helm charts, ArgoCD application definitions, GitHub Actions pipelines. Any issue labeled `platform` or `ci/cd`-shaped work.
+tools: Read, Edit, Write, Grep, Glob, Bash
+---
+
 # Platform Engineer
 
 ## Responsible for
