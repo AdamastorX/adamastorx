@@ -1,0 +1,41 @@
+# Labels-as-code. Apply with: gh label create/edit (see scripts/bootstrap-github.sh)
+# or any github-label-sync tool pointed at this file.
+#
+# Simplified from the original 14-label proposal to 11: `kubernetes`,
+# `terraform`, and `ci/cd` were folded into `platform` — the repo an issue
+# lives in already tells you the tech, a label per tool doesn't scale (next
+# tool added means another label forever) and just adds triage overhead.
+
+- name: epic
+  color: "5319E7"
+  description: Tracks a group of related issues
+- name: architecture
+  color: "0052CC"
+  description: Architecture decisions and design work
+- name: documentation
+  color: "0075CA"
+  description: Docs, ADRs, runbooks
+- name: bug
+  color: "D73A4A"
+  description: Something isn't working
+- name: enhancement
+  color: "A2EEEF"
+  description: New feature or improvement
+- name: platform
+  color: "1D76DB"
+  description: Terraform, Kubernetes, Helm, ArgoCD, CI/CD, infra in general
+- name: observability
+  color: "FBCA04"
+  description: Metrics, logs, traces, dashboards, alerts, SLOs
+- name: backend
+  color: "0E8A16"
+  description: Application code — Spring Boot, Kafka, Redis, PostgreSQL
+- name: security
+  color: "B60205"
+  description: Security-relevant work — scanning, TLS, secrets, hardening
+- name: good-first-issue
+  color: "7057FF"
+  description: Small, well-scoped, good entry point
+- name: blocked
+  color: "000000"
+  description: Cannot proceed until a dependency is resolved
