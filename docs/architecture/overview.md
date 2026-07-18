@@ -1,7 +1,9 @@
 # Architecture overview
 
-Status: M0 — no infrastructure exists yet. This document will grow as
-`platform` and `services` are bootstrapped; it is the map, not the territory.
+Status: M1 in progress — the platform layer is live; the application and
+observability layers are still target-only. The diagram below shows the
+target shape, with a note underneath marking what exists today; it is the
+map, not the territory.
 
 ## Shape of the system
 
@@ -29,6 +31,18 @@ Status: M0 — no infrastructure exists yet. This document will grow as
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+**Live today:** GitHub as source of truth; a single-node k3s v1.36.2 cluster
+(provisioned via Terraform from `platform/terraform/`); ArgoCD v3.4.5
+(app-of-apps over the `platform` repo's `argocd/apps/`, prune + selfHeal);
+Traefik 41.0.2 on hostPort 80/443; and cert-manager v1.21.0 with a local CA
+chain (`selfsigned` → `adamastorx-ca` ClusterIssuer — Let's Encrypt deferred
+until a host with public DNS). A proof app, `whoami`, serves through Traefik
+with TLS from that CA.
+
+**Not yet:** the Gateway/API/Workers application with Kafka, PostgreSQL, and
+Redis; the entire observability row (OTel Collector, Prometheus/Mimir, Loki,
+Tempo, Grafana); and the Actions CI pipeline (remainder of M1).
 
 ## Boundaries
 

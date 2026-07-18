@@ -21,7 +21,17 @@ generate genuine platform/SRE/DevOps problems worth solving.
 
 ## Current architecture
 
-None yet — M0. See `docs/architecture/overview.md` for the target shape.
+A single-node k3s v1.36.2 cluster (the owner's local machine, provisioned via
+Terraform SSH remote-exec from `platform/terraform/`; moving to a dedicated
+host is a planned variable change) runs ArgoCD v3.4.5 as the GitOps
+entrypoint — an app-of-apps root Application watches the `platform` repo's
+`argocd/apps/` on `main` with prune + selfHeal, so all cluster changes flow
+through Git. Traefik 41.0.2 (hostPort 80/443) and cert-manager v1.21.0 are
+deployed as ArgoCD Helm Applications, with a local CA chain (`selfsigned` →
+`adamastorx-ca` ClusterIssuer); Let's Encrypt is deliberately deferred until
+a host with public DNS. The proof app `whoami` serves through Traefik with
+TLS from that CA. See `docs/architecture/overview.md` for what's live vs.
+the target shape.
 
 ## Technology decisions
 
@@ -35,7 +45,10 @@ intentionally small.
 
 ## Current milestone
 
-**M0 Foundation.** See `docs/roadmap/milestones.md`.
+**M1 Platform Bootstrap** (M0 complete). Done: platform#1 (k3s), platform#2
+(ArgoCD), platform#3 (Traefik + cert-manager). Remaining: platform#4 (CI
+pipeline skeleton), platform#5 (container build/publish), platform#6 (Trivy
+scanning). See `docs/roadmap/milestones.md`.
 
 ## Repository map
 
