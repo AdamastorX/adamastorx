@@ -59,6 +59,13 @@ for repo in "${REPOS[@]}"; do
     }
   ' "$ROOT/adamastorx/.github/labels.yml")
 
+  # New repos come with GitHub's own default label set baked in — remove
+  # anything not declared in labels.yml so it doesn't drift from our
+  # single source of truth.
+  for stock in "duplicate" "help wanted" "invalid" "question" "wontfix" "good first issue"; do
+    gh label delete "$stock" --repo "$full" --yes 2>/dev/null || true
+  done
+
   echo "creating milestones"
   for m in "${MILESTONES[@]}"; do
     gh api "repos/$full/milestones" -f title="$m" >/dev/null 2>&1 || true  # already exists -> ignore
