@@ -49,8 +49,9 @@ intentionally small.
 platform#2 (ArgoCD), platform#3 (Traefik + cert-manager), platform#4 (CI
 pipeline skeleton), platform#5 (container build/publish), platform#6 (Trivy
 scanning). M2 in progress: services#1 (gateway scaffolded, built, deployed)
-done; services#2 (API), services#3 (Kafka), services#4 (PostgreSQL),
-services#5 (Redis) remaining. See `docs/roadmap/milestones.md`.
+and services#2 (API scaffolded, built, deployed, gateway forwarding wired to
+it per ADR 0010) done; services#3 (Kafka), services#4 (PostgreSQL), services#5
+(Redis) remaining. See `docs/roadmap/milestones.md`.
 
 ## Repository map
 
