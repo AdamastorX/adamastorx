@@ -1,9 +1,10 @@
 # Architecture overview
 
-Status: M1 in progress — the platform layer is live; the application and
-observability layers are still target-only. The diagram below shows the
-target shape, with a note underneath marking what exists today; it is the
-map, not the territory.
+Status: M1 Platform Bootstrap complete; M2 Distributed Application in
+progress — the platform layer, CI, and the gateway service are live; the
+rest of the application and the observability layers are still
+target-only. The diagram below shows the target shape, with a note
+underneath marking what exists today; it is the map, not the territory.
 
 ## Shape of the system
 
@@ -38,11 +39,18 @@ map, not the territory.
 Traefik 41.0.2 on hostPort 80/443; and cert-manager v1.21.0 with a local CA
 chain (`selfsigned` → `adamastorx-ca` ClusterIssuer — Let's Encrypt deferred
 until a host with public DNS). A proof app, `whoami`, serves through Traefik
-with TLS from that CA.
+with TLS from that CA. The `services` repo's CI builds and Trivy-scans every
+PR image as a required merge gate — a fixable CRITICAL/HIGH CVE in a base
+image blocks the merge, as already happened once. The Gateway service is
+scaffolded (Maven multi-module reactor in `services`), built and published
+to GHCR, and deployed in-cluster (manifests in `platform/kubernetes/gateway/`
++ `argocd/apps/gateway.yaml`), reachable at `gateway.local.adamastorx.dev`
+through Traefik with TLS, with actuator health checks wired to its
+liveness/readiness probes.
 
-**Not yet:** the Gateway/API/Workers application with Kafka, PostgreSQL, and
-Redis; the entire observability row (OTel Collector, Prometheus/Mimir, Loki,
-Tempo, Grafana); and the Actions CI pipeline (remainder of M1).
+**Not yet:** the API and Workers services with Kafka, PostgreSQL, and Redis;
+the entire observability row (OTel Collector, Prometheus/Mimir, Loki, Tempo,
+Grafana).
 
 ## Boundaries
 
