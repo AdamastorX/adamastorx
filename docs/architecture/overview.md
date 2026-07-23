@@ -1,10 +1,11 @@
 # Architecture overview
 
 Status: M1 Platform Bootstrap complete; M2 Distributed Application in
-progress — the platform layer, CI, and the gateway service are live; the
-rest of the application and the observability layers are still
-target-only. The diagram below shows the target shape, with a note
-underneath marking what exists today; it is the map, not the territory.
+progress — the platform layer, CI, and the gateway and API services are
+live; the Workers service, Kafka, PostgreSQL, Redis, and the observability
+layers are still target-only. The diagram below shows the target shape, with
+a note underneath marking what exists today; it is the map, not the
+territory.
 
 ## Shape of the system
 
@@ -46,11 +47,19 @@ scaffolded (Maven multi-module reactor in `services`), built and published
 to GHCR, and deployed in-cluster (manifests in `platform/kubernetes/gateway/`
 + `argocd/apps/gateway.yaml`), reachable at `gateway.local.adamastorx.dev`
 through Traefik with TLS, with actuator health checks wired to its
-liveness/readiness probes.
+liveness/readiness probes. The API service is scaffolded the same way (its
+own Maven module in `services`, same Spring Boot/webmvc/actuator shape as
+gateway), built, published to GHCR, and deployed in-cluster in its own
+namespace (manifests in `platform/kubernetes/api/` +
+`argocd/apps/api.yaml`), ClusterIP-only with no Ingress — it is never
+externally reachable except through `gateway`. `gateway` reaches it via a
+hand-rolled forwarding controller on Spring's blocking `RestClient`,
+resolving it through Kubernetes Service DNS
+(`http://api.api.svc.cluster.local`) injected as `API_SERVICE_URL` on the
+gateway Deployment, per ADR 0010.
 
-**Not yet:** the API and Workers services with Kafka, PostgreSQL, and Redis;
-the entire observability row (OTel Collector, Prometheus/Mimir, Loki, Tempo,
-Grafana).
+**Not yet:** the Workers service, Kafka, PostgreSQL, and Redis; the entire
+observability row (OTel Collector, Prometheus/Mimir, Loki, Tempo, Grafana).
 
 ## Boundaries
 
