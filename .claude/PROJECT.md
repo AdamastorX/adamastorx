@@ -48,9 +48,9 @@ intentionally small.
 **M2 Distributed Application** (M1 complete). M1 done: platform#1 (k3s),
 platform#2 (ArgoCD), platform#3 (Traefik + cert-manager), platform#4 (CI
 pipeline skeleton), platform#5 (container build/publish), platform#6 (Trivy
-scanning). M2 in progress: services#11 (gateway scaffolded, built, deployed)
-done; services#12 (API), services#13 (Kafka), services#14 (PostgreSQL),
-services#15 (Redis) remaining. See `docs/roadmap/milestones.md`.
+scanning). M2 in progress: services#1 (gateway scaffolded, built, deployed)
+done; services#2 (API), services#3 (Kafka), services#4 (PostgreSQL),
+services#5 (Redis) remaining. See `docs/roadmap/milestones.md`.
 
 ## Repository map
 
