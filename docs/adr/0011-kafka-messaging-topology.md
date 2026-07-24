@@ -60,8 +60,8 @@ services#2 (API) is done and deployed per ADR 0010.
   speculatively now.
 - **Consumer group id: `workers`**, matching `spring.application.name`
   (same convention `gateway`/`api` use for their app name). Ack strategy:
-  **manual acknowledgment, `AckMode.RECORD`** (`enable.auto.commit: false`)
-  — offset commits after a record is successfully processed, giving
+  **manual acknowledgment, `AckMode.MANUAL_IMMEDIATE`** (`enable.auto.commit:
+  false`) — offset commits after a record is successfully processed, giving
   **at-least-once** delivery. Rejected auto-commit: its time-based commit
   can advance the offset before processing finishes, so a crash there loses
   the message (at-most-once) — an outcome that undermines the entire point
