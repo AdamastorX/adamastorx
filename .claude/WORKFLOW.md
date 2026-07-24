@@ -44,6 +44,11 @@ Branch name: `<type>/<short-description>` (e.g. `feat/argocd-bootstrap`,
 `fix/kubeconfig-perms`), matching the Conventional Commits type of the
 change.
 
+Claude Code worktrees (`.claude/worktrees/`) are gitignored in every
+repo — they're local working state, not something to commit or clean up
+by hand. If one is ever found tracked, that's a `.gitignore` gap to fix,
+not a directory to delete.
+
 ## Agent delegation
 
 Issues get routed to the persona whose `.claude/agents/<name>.md`
@@ -67,6 +72,15 @@ per concern before work starts, or — if truly inseparable — go to whichever
 agent owns the primary deliverable, with the other concern's agent pulled in
 for review.
 
+**Platform-impacting changes get an independent review pass** — a fresh
+agent/context (not the one that designed and implemented the change)
+checks it before merge, via the Agent tool with a matching persona
+(`platform-engineer` for cluster/Helm/ArgoCD, `architect` for anything
+crossing repo boundaries). The point is a second, unbiased read, not a
+rubber stamp from the same context that already talked itself into the
+approach — this didn't happen for services#3/#4's platform work and
+should going forward.
+
 ## Lightweight path
 
 For trivial issues (`good-first-issue`, typo fixes, doc corrections):
@@ -80,3 +94,25 @@ risk, not with the fact that a workflow exists — see Coding principles in
 Documentation. A change without an updated doc/ADR/runbook where one applies
 does not meet Definition of Done, regardless of how small the diff is.
 Branch + PR + human review, likewise — regardless of how small the diff is.
+
+## Safety
+
+Never run `terraform apply`/`destroy`, or make a persistent manual
+change directly against the cluster (`kubectl apply`/`patch`/`delete`
+outside of read-only inspection and short-lived debugging), without
+explicit human confirmation for that specific action. GitOps (ADR 0003)
+means the cluster's steady state is defined in `platform` — a manual
+`kubectl` change is either a debugging step that gets thrown away, or it
+needs to become a PR, never a silent standing edit.
+
+## `SESSION_STATE.md`
+
+`docs/SESSION_STATE.md` is a scratch log of *current* state — in-flight
+work, open PRs, handoff notes, gotchas worth not rediscovering. It is not
+where decisions live (that's an ADR) or where recurring operational
+knowledge lives (that's a runbook, in `observability/runbooks/` for
+alert-response or `adamastorx/docs/runbooks/` for org-level process, per
+that folder's own README). If something written there stops being
+"what's happening right now" and becomes "how we decided to do X" or "what
+to do every time Y happens," it's graduated out and the scratch entry gets
+deleted, not left to accumulate.
