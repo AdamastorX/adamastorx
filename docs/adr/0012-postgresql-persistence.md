@@ -61,13 +61,25 @@ this ADR makes the one deliberate deviation from that emptyDir precedent.
   Application (`argocd/apps/postgresql.yaml`), same inline-`valuesObject`
   pattern as every other chart-based Application in this repo
   (Traefik, cert-manager, Kafka) — single instance (no read replicas,
-  no HA), its own `postgresql` namespace (ADR 0009's per-component
-  namespace convention), **ClusterIP only** (same trust model as Kafka
-  and `gateway`↔`api`: nothing outside the cluster talks to it, no
-  service mesh). Same `bitnamilegacy/postgresql` registry override
-  ADR 0011 already needed for Kafka — confirmed the chart's default
+  no HA), **ClusterIP only** (same trust model as Kafka and
+  `gateway`↔`api`: nothing outside the cluster talks to it, no service
+  mesh). Same `bitnamilegacy/postgresql` registry override ADR 0011
+  already needed for Kafka — confirmed the chart's default
   `docker.io/bitnami/postgresql` tag 404s the same way (verified against
   Docker Hub's registry API, not assumed from precedent alone).
+- **Deployed into `api`'s own namespace, not a separate `postgresql`
+  one** — the one deliberate deviation from Kafka's per-component
+  namespace. Kafka has two consumers across two namespaces (`api`
+  produces, `workers` consumes) and sidesteps credentials entirely
+  (PLAINTEXT, no auth), so its own namespace was free. Postgres has
+  exactly one consumer (`api`) and *does* need a password: the chart's
+  auto-generated Secret (see below) lives in the same namespace as the
+  release, and `secretKeyRef` cannot cross namespaces in Kubernetes.
+  Making that work across namespaces needs a syncing tool (Reflector,
+  External Secrets Operator) that isn't on the approved stack — clearly
+  disproportionate machinery to keep a single-consumer dependency
+  symmetrical with a genuinely-shared one. Revisit if a second consumer
+  for this Postgres instance ever shows up.
 - **A real PVC, not `emptyDir`** — the one deliberate break from the
   Kafka pattern. The chart's own default (`primary.persistence.enabled:
   true`) already does this; the only change from chart defaults is
@@ -91,11 +103,12 @@ this ADR makes the one deliberate deviation from that emptyDir precedent.
   how nothing else in this repo hand-rolls one either.
 - **Connection string follows the existing env-var-with-in-cluster-
   default pattern**: `spring.datasource.url` defaults to
-  `jdbc:postgresql://postgresql.postgresql.svc.cluster.local:5432/api`
-  (mirrors `KAFKA_BOOTSTRAP_SERVERS`'s `api.api.svc.cluster.local`-style
-  default from ADR 0010), overridable via `SPRING_DATASOURCE_URL` at
-  deploy time. Username/password get no baked-in default — unlike a
-  Service DNS name, a real password has no sane public one.
+  `jdbc:postgresql://postgresql.api.svc.cluster.local:5432/api` (same
+  same-namespace reasoning as above — mirrors `KAFKA_BOOTSTRAP_SERVERS`'s
+  `api.api.svc.cluster.local`-style default from ADR 0010), overridable
+  via `SPRING_DATASOURCE_URL` at deploy time. Username/password get no
+  baked-in default — unlike a Service DNS name, a real password has no
+  sane public one.
 
 ## Consequences
 
