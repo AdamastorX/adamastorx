@@ -4,6 +4,11 @@ Canonical source. Other repos (`platform`, `services`, `observability`)
 carry a short pointer back here instead of a copy — one file to keep
 current beats four copies drifting apart.
 
+Before starting work, also check `docs/SESSION_STATE.md` — in-flight
+work, open PRs, known gremlins, and anything the last session left
+unfinished. This file (`PROJECT.md`) is the stable picture; that one is
+the scratch log of *right now*.
+
 ## Mission
 
 Operate a small, realistic distributed system — cluster, GitOps delivery,
