@@ -1,8 +1,8 @@
 # Architecture overview
 
 Status: M1 Platform Bootstrap complete; M2 Distributed Application in
-progress — the platform layer, CI, gateway, API, workers, and Kafka are
-live; PostgreSQL, Redis, and the observability layers are still
+progress — the platform layer, CI, gateway, API, workers, Kafka, and
+PostgreSQL are live; Redis and the observability layers are still
 target-only. The diagram below shows the target shape, with a note
 underneath marking what exists today; it is the map, not the territory.
 
@@ -63,10 +63,25 @@ Application in its own `kafka` namespace, ClusterIP only. `api` publishes
 to the `work-items` topic (3 partitions, RF 1) on `POST /work-items`;
 `workers` consumes and logs it — the async produce→consume path and
 multi-replica consumer-group rebalance are both proven against this real
-cluster, not just unit tests.
+cluster, not just unit tests. `api` also persists to PostgreSQL
+(services#4, ADR 0012): `POST /work-items` writes a row via Spring Data
+JPA before publishing to Kafka, `GET /work-items` reads it back. Schema
+is a Flyway migration (versioned, repeatable). Postgres runs as a
+single-instance Bitnami chart deployed into `api`'s own namespace rather
+than a separate one — it has exactly one consumer, unlike Kafka's two,
+and its generated credentials Secret can't be read across namespaces —
+with a real PVC (2Gi, k3s's `local-path` StorageClass), the first
+genuinely persistent storage in this cluster (Kafka's topic data is
+deliberately ephemeral, ADR 0011).
 
-**Not yet:** PostgreSQL and Redis; the entire observability row (OTel
-Collector, Prometheus/Mimir, Loki, Tempo, Grafana).
+**Known gap:** the Postgres write and the Kafka publish are two separate
+operations with no compensating logic — a publish failure after a
+successful save leaves a work item persisted but never handed to
+`workers`. Flagged in ADR 0012, tracked as services#16 (transactional
+outbox / idempotent consumer), not fixed speculatively.
+
+**Not yet:** Redis; the entire observability row (OTel Collector,
+Prometheus/Mimir, Loki, Tempo, Grafana).
 
 ## Boundaries
 
