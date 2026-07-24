@@ -1,11 +1,10 @@
 # Architecture overview
 
 Status: M1 Platform Bootstrap complete; M2 Distributed Application in
-progress — the platform layer, CI, and the gateway and API services are
-live; the Workers service, Kafka, PostgreSQL, Redis, and the observability
-layers are still target-only. The diagram below shows the target shape, with
-a note underneath marking what exists today; it is the map, not the
-territory.
+progress — the platform layer, CI, gateway, API, workers, and Kafka are
+live; PostgreSQL, Redis, and the observability layers are still
+target-only. The diagram below shows the target shape, with a note
+underneath marking what exists today; it is the map, not the territory.
 
 ## Shape of the system
 
@@ -56,10 +55,18 @@ externally reachable except through `gateway`. `gateway` reaches it via a
 hand-rolled forwarding controller on Spring's blocking `RestClient`,
 resolving it through Kubernetes Service DNS
 (`http://api.api.svc.cluster.local`) injected as `API_SERVICE_URL` on the
-gateway Deployment, per ADR 0010.
+gateway Deployment, per ADR 0010. `workers` (services#3) is deployed the
+same way — its own module, its own namespace, no Service (it has no
+business HTTP API, ADR 0011) — consuming from a single-broker Kafka
+(KRaft, combined controller+broker mode) deployed as a Helm-chart ArgoCD
+Application in its own `kafka` namespace, ClusterIP only. `api` publishes
+to the `work-items` topic (3 partitions, RF 1) on `POST /work-items`;
+`workers` consumes and logs it — the async produce→consume path and
+multi-replica consumer-group rebalance are both proven against this real
+cluster, not just unit tests.
 
-**Not yet:** the Workers service, Kafka, PostgreSQL, and Redis; the entire
-observability row (OTel Collector, Prometheus/Mimir, Loki, Tempo, Grafana).
+**Not yet:** PostgreSQL and Redis; the entire observability row (OTel
+Collector, Prometheus/Mimir, Loki, Tempo, Grafana).
 
 ## Boundaries
 
