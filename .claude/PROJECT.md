@@ -53,10 +53,12 @@ intentionally small.
 **M2 Distributed Application** (M1 complete). M1 done: platform#1 (k3s),
 platform#2 (ArgoCD), platform#3 (Traefik + cert-manager), platform#4 (CI
 pipeline skeleton), platform#5 (container build/publish), platform#6 (Trivy
-scanning). M2 in progress: services#1 (gateway scaffolded, built, deployed)
-and services#2 (API scaffolded, built, deployed, gateway forwarding wired to
-it per ADR 0010) done; services#3 (Kafka), services#4 (PostgreSQL), services#5
-(Redis) remaining. See `docs/roadmap/milestones.md`.
+scanning). M2 in progress: services#1 (gateway), services#2 (API, gateway
+forwarding wired per ADR 0010), services#3 (Kafka — async produce/consume
+and multi-replica consumer-group rebalance both proven against the real
+cluster, ADR 0011), and services#4 (PostgreSQL — JPA/Flyway, real PVC,
+proven against the real cluster, ADR 0012) all done; services#5 (Redis)
+remaining. See `docs/roadmap/milestones.md`.
 
 ## Repository map
 
