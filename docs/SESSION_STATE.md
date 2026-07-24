@@ -8,7 +8,7 @@ hard way. Prune/rewrite freely as work completes; this file describes
 
 Last updated: 2026-07-24.
 
-## What's done (services#3: Kafka messaging, ADR 0011)
+## What's done (services#3: Kafka messaging, ADR 0011) — AC fully met
 
 - `services`: `api` (Kafka producer) + `workers` (new module, consumer)
   merged to main. Full path proven end to end against the **real**
@@ -19,6 +19,20 @@ Last updated: 2026-07-24.
   broker's internal-topic replication factor fixed for the single-broker
   cluster.
 - `adamastorx`: ADR 0011 corrected (ack mode — see bugs below).
+- **Consumer-group rebalance across replicas — captured** (platform
+  #17/#18): scaled `workers` to 3 against the real cluster; each replica
+  picked up exactly one of `work-items`' 3 partitions:
+  ```
+  Finished assignment for group at generation 6:
+    {consumer-1=Assignment(partitions=[work-items-2]),
+     consumer-2=Assignment(partitions=[work-items-1]),
+     consumer-3=Assignment(partitions=[work-items-0])}
+  ```
+  Reverted back to 1 replica afterwards (steady state for this small dev
+  cluster). services#3's AC ("a message produced by API is consumed by a
+  worker; consumer group behaviour documented") is now fully satisfied —
+  **the GitHub issue itself is still open and worth closing** next time
+  someone's in there.
 
 Three real bugs were found and fixed along the way (not hypothetical —
 each one broke something concrete):
@@ -85,22 +99,6 @@ source.
 
 ## In progress / left open
 
-- **`platform` PR not yet created**: branch
-  `chore/prove-workers-consumer-group-rebalance` is pushed
-  (commit bumps `kubernetes/workers/deployment.yaml` replicas 1 → 3,
-  temporarily, to capture multi-replica consumer-group rebalance logs
-  for services#3's AC — "consumer group behaviour documented"). PR
-  creation was blocked by a run of GitHub API 500s (`gh pr create`
-  GraphQL failures) at the end of the session — retry:
-  ```
-  gh pr create --repo AdamastorX/platform \
-    --title "chore: temporarily scale workers to 3 replicas to prove rebalance" \
-    --body "services#3 AC needs consumer-group rebalance proven against the real cluster (ADR 0011). Scales workers to 3 replicas to capture partition-assignment logs. Follow-up PR reverts to 1."
-  ```
-  After merge + capturing rebalance logs (scale event + partition
-  reassignment across 3 pods), **open a follow-up PR reverting replicas
-  back to 1** — the 3-replica count is a one-time proof, not the
-  intended steady state (small dev cluster, cost-conscious per ADR 0011).
 - **Live cluster drift not yet reconciled through git**:
   - `work-items` topic currently has 3 partitions because it was fixed
     **manually** (`kafka-topics.sh --alter --topic work-items
@@ -137,9 +135,7 @@ permission classifier) — set it per session.
 
 ## Where to look next
 
-- `services` issue #3 ("Integrate Kafka (KRaft) messaging between
-  services") is still open on GitHub despite the work above being merged
-  — probably worth closing once the multi-replica rebalance proof lands,
-  since that's the last unmet piece of its AC.
+- Close `services` issue #3 (see above — its AC is met, the issue just
+  hasn't been closed yet).
 - `services` issues #4 (PostgreSQL) and #5 (Redis) are the next
   milestone items (see `docs/roadmap/backlog.md`).
