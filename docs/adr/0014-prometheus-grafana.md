@@ -35,12 +35,24 @@ existed yet: no Prometheus/Grafana anywhere in `platform`.
   that data; revisit the Operator model if a fleet of Prometheus
   instances or self-service `ServiceMonitor`s ever becomes a real need —
   not before.
-- **`grafana/grafana` chart, separately.** No credential shared with
+- **Grafana chart, separately.** No credential shared with
   Prometheus — Grafana only needs Prometheus's Service DNS URL (no auth
   between in-cluster services, ADR 0010's existing trust model), and
   Grafana's own admin credential is self-contained (chart
   auto-generates a random password into its own Secret, same pattern
   Kafka/Postgres already use).
+  - **Correction, found deploying this for real**: the upstream
+    `grafana/grafana` chart (`https://grafana.github.io/helm-charts`)
+    is `deprecated: true` in its own `Chart.yaml`, migrating to
+    `grafana-community/helm-charts` after Jan 30th 2026 — a date
+    already past by the time this was deployed. Verified before
+    switching repos (not assumed): `grafana-community` publishes the
+    same chart, same values schema (`fullnameOverride`, `persistence`,
+    `datasources` all unchanged), at a newer version (12.8.0, appVersion
+    13.1.1, published 2026-07-21) than the deprecated repo's last
+    release (10.5.15) — a real continuation, not a stale mirror or a
+    divergent fork. Used `https://grafana-community.github.io/helm-charts`
+    as the chart source instead.
 - **Separate `prometheus` and `grafana` namespaces**, not a shared
   `observability` one — matches this project's actual established
   pattern (Kafka, Postgres, the OTel Collector, Traefik, cert-manager
