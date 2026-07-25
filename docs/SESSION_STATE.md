@@ -11,39 +11,27 @@ Last updated: 2026-07-25.
 ## Where things stand
 
 M2 Distributed Application: services#1 (gateway), services#2 (API),
-services#3 (Kafka, ADR 0011), and services#4 (PostgreSQL, ADR 0012) are
-done and closed. **services#5 (Redis, ADR 0016) is in flight — 3 PRs
-open, none merged yet, nothing deployed or verified against the real
-cluster:**
-- `adamastorx`: ADR 0016 (+ this note).
-- `platform`: `argocd/apps/redis.yaml` only — standalone chart, no PVC
-  (deliberate, cache-aside means Postgres stays the only source of
-  truth), auth kept on (chart default), deployed into `api`'s namespace
-  (single consumer + credential, same reasoning ADR 0012 used for
-  Postgres). Deliberately does **not** touch
-  `kubernetes/api/deployment.yaml` yet — no real image SHA exists to bump
-  to until the `services` PR below is merged and CI publishes one
-  (`docs/runbooks/cross-repo-rollout.md`'s ordering). That env-var
-  (`REDIS_HOST`/`REDIS_PASSWORD` secretKeyRef) + SHA-bump PR is the next
-  step once the `services` PR merges.
-- `services`: cache-aside for `GET /work-items/{id}` (hand-rolled
-  `RedisTemplate`, not `@Cacheable` — see ADR 0016 for why), hit/miss/error
-  Micrometer counters, a Testcontainers test that stops the Redis
-  container mid-test and proves the read still succeeds (fail-open).
-  Compiled locally (JDK 25, `./mvnw test-compile`); the Testcontainers
-  tests themselves were **not** run locally — no Docker in that sandbox —
-  so CI is the first real execution of them. Don't treat this as "tested"
-  until CI actually goes green.
-- ADR 0016 also has the honest answer to "is `GET /work-items/{id}` even
-  a good candidate": yes for the AC's actual requirements (hit/miss
-  metric, tested fail-open), no for demonstrating invalidation-on-write
-  specifically, since `work_items` has no update path to invalidate
-  against — stated plainly rather than picked around, per the issue's
-  own ask.
-- Once the `services` PR is merged: rest of the rollout checklist
-  (image SHA bump PR, ArgoCD sync, functional proof against the real
-  cluster, then — only once actually verified — the `docs/architecture/overview.md`
-  "Live today" addition and this note gets pruned).
+services#3 (Kafka, ADR 0011), services#4 (PostgreSQL, ADR 0012), and
+**services#5 (Redis cache-aside, ADR 0016) are all done and closed.**
+Redis verified end to end against the real cluster: `GET
+/work-items/{id}` twice on a fresh item produced `cache_gets_total{
+result="miss"} 1.0` then `{result="hit"} 1.0`, `error 0.0`, read
+straight off `/actuator/prometheus`. Fail-open on a Redis outage is
+proven in CI (`WorkItemCacheOutageIntegrationTest` stops the
+Testcontainers Redis mid-test), not repeated live to avoid disrupting
+the real Redis for a case already covered. Honest answer baked into
+ADR 0016: `GET /work-items/{id}` is a good candidate for this issue's
+actual AC (hit/miss metric, tested fail-open) but not for demonstrating
+invalidation-on-write, since `work_items` has no update path — any
+invalidation here is TTL-only, stated plainly rather than picked
+around.
+
+**Real incident found during the Redis rollout, unrelated to Redis
+itself**: the `postgresql` Secret had silently regenerated to a value
+different from what Postgres was actually initialized with — see the
+gotcha below. Fixed live with explicit human confirmation
+(`ALTER USER api WITH PASSWORD`); root cause tracked as
+`platform`#34, unresolved.
 
 M3 Observability: **observability#1 (OTel tracing, ADR 0013, backlog
 #17), #2 (Prometheus + Grafana, ADR 0014, #18), #3 (Loki + Tempo +
@@ -169,6 +157,35 @@ config regression; recreate the topic manually
 --replication-factor 1`) to unblock testing, no chart-side provisioning
 Job re-runs this automatically.
 
+**A Bitnami chart's auto-generated password Secret can silently
+regenerate and diverge from the live database/service's actual
+credential** (found deploying services#5, tracked unresolved as
+`platform`#34). Postgres never restarted, but its `postgresql` Secret's
+`password`/`postgres-password` values stopped matching what the
+container was actually started with (visible in the running pod's own
+`POSTGRES_PASSWORD`/`POSTGRES_POSTGRES_PASSWORD` env vars, baked in at
+container start and never changed). An already-running pod with an
+established connection pool won't notice — only a *new* connection
+attempt (a fresh pod, a rolling restart) fails with
+`FATAL: password authentication failed`. If this recurs: compare the
+Secret's current value against the target pod's own env
+(`kubectl exec <pod> -- env | grep PASSWORD`) before assuming a config
+regression — if they differ, `ALTER USER <role> WITH PASSWORD
+'<current Secret value>'` inside the DB pod restores access (get
+explicit confirmation first, this mutates live data). Suspected but
+unconfirmed cause: ArgoCD's Helm rendering may not preserve
+`common.secrets.passwords.manage`'s "reuse existing Secret" idempotency
+the way a real `helm upgrade` would. Same auto-generation pattern is
+used by Redis's password and Kafka's cluster ID — unconfirmed whether
+they're equally at risk.
+
+**A crash-looping pod's exponential backoff can take minutes to retry
+even after the underlying cause is fixed.** `kubectl delete pod
+<name>` (the Deployment/StatefulSet recreates it immediately) is a
+safe, reversible way to force an immediate retry instead of waiting out
+the backoff timer — not a persistent or destructive action, just a
+faster feedback loop.
+
 ## Cluster access (this machine)
 
 k3s kubeconfig at `~/.kube/config`. `kubectl` here does **not** default
@@ -208,10 +225,10 @@ new namespace by default.
 
 ## Where to look next
 
-- services#5 (Redis) — in progress as of this writing (a background
-  agent was dispatched to implement it in parallel with the dashboards
-  work above; check its PRs across `adamastorx`/`services`/`platform`
-  before assuming it's unstarted).
+- `platform`#34 (Postgres Secret regeneration, P1) — real, unresolved,
+  can silently break any stateful component's next pod restart. Worth
+  picking up before it happens again on Kafka or Redis's own
+  credentials.
 - M4: #21 (SLOs/alerting, depends on #20's now-live dashboards) and
   #19a (Prometheus exemplars, metric→trace pivot) are the next real
   gaps — neither started.

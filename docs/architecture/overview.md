@@ -1,7 +1,7 @@
 # Architecture overview
 
-Status: M1 Platform Bootstrap complete; M2 Distributed Application in
-progress (Kafka/PostgreSQL live, Redis still target-only); M3
+Status: M1 Platform Bootstrap complete; M2 Distributed Application
+complete (Kafka, PostgreSQL, and Redis all live); M3
 Observability under way — tracing (OpenTelemetry Collector + Tempo),
 metrics (Prometheus + Grafana), logs (Loki + Alloy), and golden-signal
 dashboards for all three services are all live; long-term/multi-tenant
@@ -83,6 +83,22 @@ successful save leaves a work item persisted but never handed to
 `workers`. Flagged in ADR 0012, tracked as services#16 (transactional
 outbox / idempotent consumer), not fixed speculatively.
 
+`api` also fronts `GET /work-items/{id}` with a Redis cache-aside layer
+(services#5, ADR 0016): a hand-rolled `RedisTemplate`-based service
+(not `@Cacheable` — Boot has no Redis cache-metrics binder), hit/miss/
+error counters on `/actuator/prometheus`, fail-open to PostgreSQL on a
+Redis outage (tested in CI by stopping the Testcontainers Redis
+mid-test, confirmed against the live cluster too: a real
+`GET`/`GET` round-trip produced one `miss` then one `hit`, zero
+errors). Redis (Bitnami chart, standalone architecture, no PVC — cache-
+aside means Postgres stays the only source of truth) lives in `api`'s
+namespace, not its own, same reasoning ADR 0012 used for Postgres
+(single consumer, real credential, `secretKeyRef` can't cross
+namespaces). No invalidation-on-write is demonstrated here, on
+purpose and stated plainly: `work_items` rows are immutable post-
+creation, so there's nothing to invalidate against — any expiry here
+is TTL-only hygiene, not a correctness mechanism.
+
 **Observability (M3):** all three services (`gateway`/`api`/`workers`)
 export traces via Micrometer Tracing + OTLP to an OpenTelemetry
 Collector (observability#1, ADR 0013) deployed as an ArgoCD Application
@@ -122,7 +138,7 @@ percentiles (Boot's histogram buckets aren't enabled), and `workers`'
 "saturation" panel uses thread-pool usage as a stated proxy, since no
 Kafka consumer-lag metric is wired up yet.
 
-**Not yet:** Redis; Mimir (long-term/multi-tenant metrics storage,
+**Not yet:** Mimir (long-term/multi-tenant metrics storage,
 backlog #18a, a separate experiment not required for the single-node
 Prometheus already live); alerts and SLOs (backlog #21, M4).
 
