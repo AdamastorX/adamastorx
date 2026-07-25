@@ -3,11 +3,11 @@
 Status: M1 Platform Bootstrap complete; M2 Distributed Application in
 progress (Kafka/PostgreSQL live, Redis still target-only); M3
 Observability under way — tracing (OpenTelemetry Collector + Tempo),
-metrics (Prometheus + Grafana), and logs (Loki + Alloy) are all live;
-long-term/multi-tenant metrics storage (Mimir) is not, and dashboards/
-alerts haven't been built yet. The diagram below shows the target
-shape, with a note underneath marking what exists today; it is the
-map, not the territory.
+metrics (Prometheus + Grafana), logs (Loki + Alloy), and golden-signal
+dashboards for all three services are all live; long-term/multi-tenant
+metrics storage (Mimir) and alerting/SLOs are not. The diagram below
+shows the target shape, with a note underneath marking what exists
+today; it is the map, not the territory.
 
 ## Shape of the system
 
@@ -110,12 +110,21 @@ Tempo pre-provisioned as datasources, with the Loki↔Tempo trace/log
 pivot wired via `derivedFields`/`tracesToLogsV2` — proven end to end
 with a real request's trace ID appearing in both. No metric→trace
 exemplar pivot yet (backlog #19a — needs Prometheus native histograms +
-a Micrometer bridge on all three services) and no dashboards or alerts
-built (backlog #20, M4).
+a Micrometer bridge on all three services). Grafana also has one golden-
+signal dashboard per service (`gateway`/`api`/`workers`, backlog #20,
+ADR 0017), provisioned as code (`platform/argocd/apps/grafana.yaml`'s
+`dashboardProviders`/`dashboards` values, file-based, no sidecar) —
+deliberately shipped ahead of alerts/SLOs (backlog #21, M4), a tension
+ADR 0017 resolves explicitly rather than silently: these four signals
+are the standard SLO precursor, not unrelated dashboard sprawl. Two
+known gaps stated on the dashboards themselves: no true latency
+percentiles (Boot's histogram buckets aren't enabled), and `workers`'
+"saturation" panel uses thread-pool usage as a stated proxy, since no
+Kafka consumer-lag metric is wired up yet.
 
 **Not yet:** Redis; Mimir (long-term/multi-tenant metrics storage,
-backlog #18a, a separate experiment not
-required for the single-node Prometheus already live).
+backlog #18a, a separate experiment not required for the single-node
+Prometheus already live); alerts and SLOs (backlog #21, M4).
 
 ## Boundaries
 
