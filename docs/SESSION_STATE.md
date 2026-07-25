@@ -18,15 +18,17 @@ issue body for the measurable-hypothesis requirement before implementing
 because it's on the approved stack).
 
 M3 Observability: **observability#1 (OpenTelemetry tracing, ADR 0013,
-backlog #17) done** — a real trace ID correlates `gateway`→`api` (HTTP)
-and `api`→Kafka→`workers` (message hop), confirmed in live application
-logs. **observability#2 (Prometheus + Grafana, ADR 0014, backlog #18)
-also done** — all 4 scrape targets (`gateway`/`api`/`workers`/
-`otel-collector`) confirmed `up` in Prometheus via its own
-`/api/v1/targets`, Grafana healthy with the Prometheus datasource
-pre-provisioned. Remaining M3 items: #19 Loki/Tempo, #20 dashboards —
-can run in parallel with Redis, they don't gate on it, see
-`docs/roadmap/milestones.md`.
+backlog #17), #2 (Prometheus + Grafana, ADR 0014, backlog #18), and #3
+(Loki + Tempo + Alloy, ADR 0015, backlog #19) are all done.** A real
+trace from a live `POST /work-items` request was confirmed end to end:
+landed in Tempo (2 spans, `api` + `workers`), its log line (same trace
+ID) landed in Loki, and Grafana's Loki↔Tempo pivot (`derivedFields`/
+`tracesToLogsV2`) works both directions. All 4 Prometheus targets
+(`gateway`/`api`/`workers`/`otel-collector`) confirmed `up`. **Only
+remaining M3 item: #20 dashboards** — can run in parallel with Redis,
+see `docs/roadmap/milestones.md`. Backlog #19a (Prometheus exemplars,
+the metric→trace pivot) is tracked but deliberately not built —
+separate app-level change.
 
 ## Recurring gotcha worth knowing before touching this stack again
 
@@ -104,7 +106,37 @@ already passed by the time this was deployed — verified
 `grafana-community/helm-charts` was a real, actively-published
 continuation (same values schema, newer version) before switching the
 `repoURL`, rather than deploying an already-stale chart into a project
-meant to model this discipline.
+meant to model this discipline. Same finding recurred for Loki/Tempo/
+Promtail (observability#3): `tempo`/`promtail` are `deprecated: true`
+outright, `loki`'s original repo now serves GEL-enterprise only.
+
+**A "ring: ACTIVE, /ready: ready" single-instance chart can still
+0% work if `replication_factor` doesn't match replica count.** Loki's
+chart defaults `common.replication_factor: 3` (inherited from its
+multi-replica modes) — with one `singleBinary` replica, every query
+500'd with "too many unhealthy instances in the ring," no startup or
+readiness-probe failure at all. Only actually querying surfaced it.
+Fixed with `commonConfig.replication_factor: 1`. Worth checking on any
+future single-replica chart that was originally designed to scale out.
+
+**GitOps branch-vs-stale-local-main trap**: creating a new branch from
+a local `main` that hasn't been `git pull`ed since the last squash-merge
+produces a branch whose history diverges from `origin/main` even when
+the file content is identical — GitHub reports the PR as `CONFLICTING`
+despite `git diff origin/main` showing a clean, minimal diff. Fix:
+`git fetch && git rebase origin/main` before pushing. Always `git fetch
+origin --quiet && git checkout main --quiet && git pull origin main
+--quiet` immediately before branching for a new PR, not just at the
+start of a work session.
+
+**Kafka topics don't survive a broker pod restart** (ADR 0011,
+deliberately ephemeral storage) — if `work-items` is suddenly
+`UNKNOWN_TOPIC_OR_PARTITION` after having worked before, check
+`kubectl get pods -n kafka` for a recent restart before assuming a
+config regression; recreate the topic manually
+(`kafka-topics.sh --create --topic work-items --partitions 3
+--replication-factor 1`) to unblock testing, no chart-side provisioning
+Job re-runs this automatically.
 
 ## Cluster access (this machine)
 
@@ -148,15 +180,12 @@ new namespace by default.
 - services#5 (Redis) is next — write/confirm the measurable hypothesis
   in its issue body before touching code (this session's staff-eng
   review already rewrote the issue for this reason).
-- M3 #19 (Loki/Tempo) and #20 (dashboards-as-code) can run in parallel
-  with Redis — same shape of decisions likely needed as Kafka/Postgres/
-  OTel/Prometheus: client library choice, deployment pattern (same
-  Helm-chart-via-ArgoCD-Application pattern every stateful/infra piece
-  has used so far), a namespace call using the reasoning above. Tempo
-  is the natural next step for the Collector's `debug`-exporter-only
-  trace pipeline (ADR 0013) — small diff, swap/add an OTLP exporter.
-- Grafana has no dashboards yet (deliberate, ADR 0014) — #20 is that
-  deliverable. Datasource is already provisioned as code; a dashboard
-  should be too, alongside the alert/SLO it exists to support (per the
-  `observability-engineer` persona's rule already referenced in ADR
+- M3 #20 (dashboards-as-code) can run in parallel with Redis — Grafana
+  has no dashboards yet (deliberate, ADR 0014/0015). Datasources
+  (Prometheus, Loki, Tempo) are already provisioned as code; dashboards
+  should be too, alongside the alert/SLO each exists to support (per
+  the `observability-engineer` persona's rule already referenced in ADR
   0014).
+- Backlog #19a (Prometheus exemplars, metric→trace pivot) is a real,
+  tracked gap — needs native histograms + a Micrometer exemplar bridge
+  added to all three services' actuator config, not started.

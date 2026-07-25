@@ -48,6 +48,14 @@ backend, only the Collector's stdout dump.
   header for no benefit (same "don't build for a need that doesn't
   exist" reasoning as everywhere else in this project). A 2Gi PVC
   (`local-path`), same pattern as Prometheus/Postgres.
+  - **Correction, found deploying this for real**: the chart's
+    `common.replication_factor` defaults to 3, inherited from its
+    multi-replica `SimpleScalable`/`Distributed` modes — with exactly
+    one `singleBinary` replica, the ring permanently considered itself
+    under-replicated and every query 500'd with "too many unhealthy
+    instances in the ring." No startup error, `/ready` reported ready,
+    the pod looked healthy — only actually querying surfaced it. Fixed
+    with `commonConfig.replication_factor: 1`.
 - **Tempo: the `tempo` (single-binary) chart, not `tempo-distributed`.**
   One binary handles ingest, storage, and query — the distributed chart
   splits this into separate scalable components, solving a scale
