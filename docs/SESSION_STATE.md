@@ -17,18 +17,21 @@ issue body for the measurable-hypothesis requirement before implementing
 (this session's staff-eng review rewrote it; don't add Redis just
 because it's on the approved stack).
 
-M3 Observability: **observability#1 (OpenTelemetry tracing, ADR 0013,
-backlog #17), #2 (Prometheus + Grafana, ADR 0014, backlog #18), and #3
-(Loki + Tempo + Alloy, ADR 0015, backlog #19) are all done.** A real
-trace from a live `POST /work-items` request was confirmed end to end:
-landed in Tempo (2 spans, `api` + `workers`), its log line (same trace
-ID) landed in Loki, and Grafana's Loki↔Tempo pivot (`derivedFields`/
-`tracesToLogsV2`) works both directions. All 4 Prometheus targets
-(`gateway`/`api`/`workers`/`otel-collector`) confirmed `up`. **Only
-remaining M3 item: #20 dashboards** — can run in parallel with Redis,
-see `docs/roadmap/milestones.md`. Backlog #19a (Prometheus exemplars,
-the metric→trace pivot) is tracked but deliberately not built —
-separate app-level change.
+M3 Observability: **observability#1 (OTel tracing, ADR 0013, backlog
+#17), #2 (Prometheus + Grafana, ADR 0014, #18), #3 (Loki + Tempo +
+Alloy, ADR 0015, #19), and #4 (golden-signal dashboards, ADR 0017,
+#20) are all done — M3 is complete.** A real trace from a live `POST
+/work-items` request was confirmed end to end: landed in Tempo (2
+spans, `api` + `workers`), its log line (same trace ID) landed in
+Loki, Grafana's Loki↔Tempo pivot works both directions, and all 4
+Prometheus targets confirmed `up`. Dashboards were built by a
+background agent (per-service golden signals, provisioned as code,
+confirmed via the Grafana pod's own provisioning logs — "finished to
+provision dashboards," no errors, `grafana-dashboards-golden-signals`
+ConfigMap has 3 keys). Backlog #19a (Prometheus exemplars, metric→trace
+pivot) and #21 (SLOs/alerting, M4) are tracked but deliberately not
+built yet — #21 explicitly depends on #20's dashboards, see ADR 0017's
+"tension worth resolving explicitly" section for the reasoning.
 
 ## Recurring gotcha worth knowing before touching this stack again
 
@@ -177,15 +180,25 @@ new namespace by default.
 
 ## Where to look next
 
-- services#5 (Redis) is next — write/confirm the measurable hypothesis
-  in its issue body before touching code (this session's staff-eng
-  review already rewrote the issue for this reason).
-- M3 #20 (dashboards-as-code) can run in parallel with Redis — Grafana
-  has no dashboards yet (deliberate, ADR 0014/0015). Datasources
-  (Prometheus, Loki, Tempo) are already provisioned as code; dashboards
-  should be too, alongside the alert/SLO each exists to support (per
-  the `observability-engineer` persona's rule already referenced in ADR
-  0014).
-- Backlog #19a (Prometheus exemplars, metric→trace pivot) is a real,
-  tracked gap — needs native histograms + a Micrometer exemplar bridge
-  added to all three services' actuator config, not started.
+- services#5 (Redis) — in progress as of this writing (a background
+  agent was dispatched to implement it in parallel with the dashboards
+  work above; check its PRs across `adamastorx`/`services`/`platform`
+  before assuming it's unstarted).
+- M4: #21 (SLOs/alerting, depends on #20's now-live dashboards) and
+  #19a (Prometheus exemplars, metric→trace pivot) are the next real
+  gaps — neither started.
+- observability#7 (chaos/incident-lab scenarios) — expanded with 6
+  concrete scenarios earlier this session but not implemented.
+
+## Working via background agents (new pattern, this session)
+
+For independent, parallelizable work (e.g. Redis + dashboards run
+side by side), dispatch background agents that clone their own scratch
+copies of whichever repos they need — never point them at the shared
+`/home/lmpeixoto/repos/AdamastorX/*` checkouts, since a second
+agent (or the primary session) may be using them at the same time.
+Each agent should: read this file first, follow the same ADR/
+verification discipline documented here, open PRs, wait for CI, then
+**stop without merging** — every PR merge needs explicit human
+confirmation, agents included, no exceptions. The orchestrating session
+reviews the diff and handles the merge once a human confirms.
