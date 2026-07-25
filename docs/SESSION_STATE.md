@@ -6,40 +6,72 @@ threads, and things the next session shouldn't have to re-discover the
 hard way. Prune/rewrite freely as work completes; this file describes
 *current* state, not history (git history is the record of the past).
 
-Last updated: 2026-07-24.
+Last updated: 2026-07-25.
 
 ## Where things stand
 
 M2 Distributed Application: services#1 (gateway), services#2 (API),
 services#3 (Kafka, ADR 0011), and services#4 (PostgreSQL, ADR 0012) are
-all done and closed — both proven end to end against the **real**
-cluster, not just unit tests. **services#5 (Redis) is the next open
-item.** Nothing started on it yet.
+done and closed. **observability#1 (OpenTelemetry tracing, ADR 0013,
+backlog #17) is also done** — a real trace ID now correlates across
+`gateway`→`api` (HTTP) and `api`→Kafka→`workers` (message hop),
+confirmed in live application logs, not just "spans exist somewhere."
+**services#5 (Redis) is the next open item** — see its issue body for
+the measurable-hypothesis requirement before implementing (this session's
+staff-eng review rewrote it; don't add Redis just because it's on the
+approved stack).
+
+M3's remaining items (#18 Prometheus/Grafana, #19 Loki/Tempo, #20
+dashboards) can start in parallel with Redis — they don't gate on it,
+see `docs/roadmap/milestones.md`.
 
 ## Recurring gotcha worth knowing before touching this stack again
 
 **Boot 4.1 modularized its autoconfiguration**: the client library
-(`spring-kafka`, `flyway-core`, classic Jackson 2) and the
-`FooAutoConfiguration` classes that actually wire it into a Spring
-context now live in *separate* artifacts (`spring-boot-kafka`,
-`spring-boot-flyway`, `jackson-databind` needing `spring-boot-webmvc`'s
-replacement). Adding the client library alone compiles fine and then
-silently doesn't work at runtime (no error — Flyway just never ran, the
-app booted straight into "relation work_items does not exist" the first
-time this bit). Hit this three separate times across services#3 and
-services#4. If a future integration (Redis, anything else) compiles
-clean but a Boot feature just isn't activating, check for a matching
-`spring-boot-<name>` artifact before assuming the library itself is
-broken.
+(`spring-kafka`, `flyway-core`, classic Jackson 2, `opentelemetry-exporter-otlp`)
+and the `FooAutoConfiguration` classes that actually wire it into a
+Spring context live in *separate* artifacts (`spring-boot-kafka`,
+`spring-boot-flyway`, `spring-boot-micrometer-tracing` +
+`-opentelemetry`). Adding the client library alone compiles fine and
+then silently doesn't work at runtime — no error, the feature just
+never activates. Hit this four separate times now (services#3, #4,
+observability#1). If a future integration (Redis, anything else)
+compiles clean but a Boot feature just isn't activating, check for a
+matching `spring-boot-<name>` artifact before assuming the library
+itself is broken.
 
-Also: **major-version library bumps rename Maven artifacts without
-renaming Java packages.** Testcontainers 2.x (which Boot 4.1 pins)
-renamed `org.testcontainers:postgresql`/`junit-jupiter` to
-`testcontainers-postgresql`/`testcontainers-junit-jupiter` — the classes
-(`org.testcontainers.containers.PostgreSQLContainer`, etc.) didn't move.
-Verify actual current artifact coordinates by compiling, not from
-memory/old docs — this and the Jackson 2/3 split both looked "obviously
-right" from familiarity and were wrong.
+**Boot property names move between major versions without a compile
+error.** `management.otlp.tracing.endpoint` looked right (matches the
+Boot 3.x docs pattern still floating around) but is deprecated at error
+level since Boot 4.0 and silently binds to nothing — no startup
+failure, no export failure, just a property nobody reads. Correct path:
+`management.opentelemetry.tracing.export.otlp.endpoint`. When a
+property "should" work and doesn't, check the actual
+`spring-configuration-metadata.json` inside the relevant
+`spring-boot-*` jar (`unzip -p <jar> META-INF/spring-configuration-metadata.json`)
+before assuming the code is broken — it's often the property name that
+moved.
+
+**`OTEL_*`-prefixed environment variables are reserved by the
+OpenTelemetry SDK itself**, independent of whatever Spring property
+you meant them to override. Naming a Kubernetes Deployment env var
+`OTEL_EXPORTER_OTLP_ENDPOINT` (seemed like the "correct, standard"
+choice) made the OTel SDK's own `autoconfigure-spi` module pick it up
+directly and build a second, conflicting exporter, doubling the
+`/v1/traces` path into a silent 404. Any future OTel-adjacent
+deploy-time override needs a name outside the `OTEL_*` namespace.
+
+**Hand-built Spring beans bypass Boot's `*.observation-enabled`
+properties.** `WorkItemProducerConfig`/`WorkItemConsumerConfig`
+construct their own typed `KafkaTemplate`/listener container factory
+(documented reason: Boot's auto-configured ones are untyped) —
+`spring.kafka.template.observation-enabled`/`.listener.observation-enabled`
+only wire into Boot's *own* auto-configured beans, so those properties
+were silent no-ops here. Needed an explicit
+`.setObservationEnabled(true)` call in the `@Bean` methods themselves.
+Same likely applies to any other hand-built Spring integration bean
+going forward — check whether a "just set this property" fix is
+actually reaching the bean in use.
 
 ## Cluster access (this machine)
 
@@ -68,21 +100,23 @@ caching/chart problem — it might just be a frozen operation.
 ## Namespace-per-component isn't absolute
 
 Established pattern: each service/infra component gets its own
-namespace (gateway, api, workers, kafka). PostgreSQL broke that pattern
-deliberately (ADR 0012) — it lives in `api`'s namespace, not its own,
-because `secretKeyRef` can't cross namespaces and Postgres has exactly
-one consumer here (unlike Kafka's two, which also sidesteps the whole
-problem via PLAINTEXT/no-auth). If Redis also ends up needing
-credentials and has a single consumer, the same reasoning likely
-applies — don't assume it needs its own namespace by default.
+namespace (gateway, api, workers, kafka, otel). PostgreSQL broke that
+pattern deliberately (ADR 0012) — it lives in `api`'s namespace, not
+its own, because `secretKeyRef` can't cross namespaces and Postgres has
+exactly one consumer here. The OTel Collector (ADR 0013) got its own
+`otel` namespace like Kafka, not Postgres's treatment — three consumers,
+no credential to worry about (open OTLP receiver, like Kafka's
+PLAINTEXT). If Redis ends up needing credentials and has a single
+consumer, the Postgres reasoning likely applies again — don't assume a
+new namespace by default.
 
 ## Where to look next
 
-- services#5 (Redis) is the next milestone item — same shape of
-  decisions likely needed as Postgres: client library choice (Lettuce is
-  Boot's default and already pulled in by `spring-boot-starter-data-redis`,
-  no real alternative worth considering here), deployment (Bitnami
-  `redis` chart following the same pattern), and a namespace call using
-  the reasoning above.
-- After that, M2 is complete and M3 (Observability) starts — see
-  `docs/roadmap/milestones.md`.
+- services#5 (Redis) is next — write/confirm the measurable hypothesis
+  in its issue body before touching code (this session's staff-eng
+  review already rewrote the issue for this reason).
+- M3 items #18-20 can run in parallel with Redis — same shape of
+  decisions likely needed as Kafka/Postgres/OTel: client library choice,
+  deployment pattern (probably the same Helm-chart-via-ArgoCD-Application
+  pattern every stateful/infra piece has used so far), a namespace call
+  using the reasoning above.
