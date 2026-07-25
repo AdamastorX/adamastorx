@@ -12,18 +12,21 @@ Last updated: 2026-07-25.
 
 M2 Distributed Application: services#1 (gateway), services#2 (API),
 services#3 (Kafka, ADR 0011), and services#4 (PostgreSQL, ADR 0012) are
-done and closed. **observability#1 (OpenTelemetry tracing, ADR 0013,
-backlog #17) is also done** — a real trace ID now correlates across
-`gateway`→`api` (HTTP) and `api`→Kafka→`workers` (message hop),
-confirmed in live application logs, not just "spans exist somewhere."
-**services#5 (Redis) is the next open item** — see its issue body for
-the measurable-hypothesis requirement before implementing (this session's
-staff-eng review rewrote it; don't add Redis just because it's on the
-approved stack).
+done and closed. **services#5 (Redis) is the next open item** — see its
+issue body for the measurable-hypothesis requirement before implementing
+(this session's staff-eng review rewrote it; don't add Redis just
+because it's on the approved stack).
 
-M3's remaining items (#18 Prometheus/Grafana, #19 Loki/Tempo, #20
-dashboards) can start in parallel with Redis — they don't gate on it,
-see `docs/roadmap/milestones.md`.
+M3 Observability: **observability#1 (OpenTelemetry tracing, ADR 0013,
+backlog #17) done** — a real trace ID correlates `gateway`→`api` (HTTP)
+and `api`→Kafka→`workers` (message hop), confirmed in live application
+logs. **observability#2 (Prometheus + Grafana, ADR 0014, backlog #18)
+also done** — all 4 scrape targets (`gateway`/`api`/`workers`/
+`otel-collector`) confirmed `up` in Prometheus via its own
+`/api/v1/targets`, Grafana healthy with the Prometheus datasource
+pre-provisioned. Remaining M3 items: #19 Loki/Tempo, #20 dashboards —
+can run in parallel with Redis, they don't gate on it, see
+`docs/roadmap/milestones.md`.
 
 ## Recurring gotcha worth knowing before touching this stack again
 
@@ -73,6 +76,36 @@ Same likely applies to any other hand-built Spring integration bean
 going forward — check whether a "just set this property" fix is
 actually reaching the bean in use.
 
+**`spring-boot-starter-actuator` alone does not expose
+`/actuator/prometheus`.** Two separate things are needed, both easy to
+assume are already covered: the `micrometer-registry-prometheus`
+dependency (actuator brings Micrometer's core, not the Prometheus
+registry), and `management.endpoints.web.exposure.include:
+health,prometheus` (Boot doesn't expose non-default endpoints over HTTP
+just because the registry is present). Both ADR 0013 and the first pass
+of ADR 0014 assumed this endpoint "already existed" from actuator alone
+— it took an actual Prometheus scrape returning 404 on all three
+services to find it (observability#2).
+
+**Helm chart `ports.*.enabled: false` can hide a port the process is
+already listening on.** The otel-collector chart's own self-monitoring
+metrics (`:8888`) are always active internally (default telemetry
+config), but the chart's `ports.metrics.enabled` defaults to `false`,
+so the generated Service never got a port for it — Service-DNS
+connections just timed out (process running, nothing routing to it).
+Fixable by `helm template`-ing the chart locally with the flag flipped
+and diffing the rendered Service before assuming a scrape-target
+timeout is a network/firewall problem.
+
+**A chart's `deprecated: true` + a stated migration deadline is worth
+checking against today's date before writing the manifest**, not
+after. `grafana/grafana`'s stated migration deadline (Jan 30th 2026) had
+already passed by the time this was deployed — verified
+`grafana-community/helm-charts` was a real, actively-published
+continuation (same values schema, newer version) before switching the
+`repoURL`, rather than deploying an already-stale chart into a project
+meant to model this discipline.
+
 ## Cluster access (this machine)
 
 k3s kubeconfig at `~/.kube/config`. `kubectl` here does **not** default
@@ -115,8 +148,15 @@ new namespace by default.
 - services#5 (Redis) is next — write/confirm the measurable hypothesis
   in its issue body before touching code (this session's staff-eng
   review already rewrote the issue for this reason).
-- M3 items #18-20 can run in parallel with Redis — same shape of
-  decisions likely needed as Kafka/Postgres/OTel: client library choice,
-  deployment pattern (probably the same Helm-chart-via-ArgoCD-Application
-  pattern every stateful/infra piece has used so far), a namespace call
-  using the reasoning above.
+- M3 #19 (Loki/Tempo) and #20 (dashboards-as-code) can run in parallel
+  with Redis — same shape of decisions likely needed as Kafka/Postgres/
+  OTel/Prometheus: client library choice, deployment pattern (same
+  Helm-chart-via-ArgoCD-Application pattern every stateful/infra piece
+  has used so far), a namespace call using the reasoning above. Tempo
+  is the natural next step for the Collector's `debug`-exporter-only
+  trace pipeline (ADR 0013) — small diff, swap/add an OTLP exporter.
+- Grafana has no dashboards yet (deliberate, ADR 0014) — #20 is that
+  deliverable. Datasource is already provisioned as code; a dashboard
+  should be too, alongside the alert/SLO it exists to support (per the
+  `observability-engineer` persona's rule already referenced in ADR
+  0014).
