@@ -155,9 +155,15 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 
 **19. Deploy Loki and Tempo for logs and traces**
 - Purpose: Logs and traces are centrally queryable and correlated with metrics.
-- Acceptance Criteria: Logs from all services in Loki; traces from #17 in Tempo; Grafana can pivot from a metric to a trace to a log line.
+- Acceptance Criteria: Logs from all services in Loki; traces from #17 in Tempo; Grafana can pivot from a trace to a log line and back.
 - Dependencies: #18.
 - Priority: P1. Labels: `observability`.
+
+**19a. Prometheus exemplars — metric-to-trace pivot, treat as a separate follow-up to #19**
+- Purpose: #19's original "metric to trace" pivot needs exemplars — a Prometheus sample carrying the trace ID active when it was recorded — which needs native histograms/OpenMetrics scraping and a Micrometer exemplar bridge on all three services, none of which exists yet. Deploying Loki/Tempo and wiring the trace↔log pivot (#19) doesn't need this; bundling it in would gate a working two-way pivot on a separately-scoped app-level change.
+- Acceptance Criteria: A Prometheus panel showing request latency has an exemplar linking a sample to its Tempo trace, verified for at least one service.
+- Dependencies: #19.
+- Priority: P2. Labels: `observability`.
 
 **20. Build baseline Grafana dashboards for golden signals**
 - Purpose: Latency, traffic, errors, saturation are visible at a glance for every service.
