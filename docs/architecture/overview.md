@@ -2,11 +2,12 @@
 
 Status: M1 Platform Bootstrap complete; M2 Distributed Application in
 progress (Kafka/PostgreSQL live, Redis still target-only); M3
-Observability under way — tracing (OpenTelemetry Collector) and metrics
-(Prometheus + Grafana) are live, logs (Loki) and long-term/multi-tenant
-metrics storage (Tempo, Mimir) are not. The diagram below shows the
-target shape, with a note underneath marking what exists today; it is
-the map, not the territory.
+Observability under way — tracing (OpenTelemetry Collector + Tempo),
+metrics (Prometheus + Grafana), and logs (Loki + Alloy) are all live;
+long-term/multi-tenant metrics storage (Mimir) is not, and dashboards/
+alerts haven't been built yet. The diagram below shows the target
+shape, with a note underneath marking what exists today; it is the
+map, not the territory.
 
 ## Shape of the system
 
@@ -87,25 +88,33 @@ export traces via Micrometer Tracing + OTLP to an OpenTelemetry
 Collector (observability#1, ADR 0013) deployed as an ArgoCD Application
 in its own `otel` namespace — a real trace ID correlates
 `gateway`→`api` (HTTP) and `api`→Kafka→`workers` (message hop), proven
-in live application logs. Traces land in the Collector's `debug`
-exporter (stdout) only for now — no backend (Tempo) yet, so "follow a
-trace" today means reading Collector pod logs. Metrics flow the
-existing Boot actuator way: all three services expose
-`/actuator/prometheus` (needs `micrometer-registry-prometheus` +
-`management.endpoints.web.exposure.include`, not on by default — a real
-gap found deploying this), scraped by a plain `prometheus-community/
-prometheus` chart (own `prometheus` namespace, no Operator, 3-day
-retention, 2Gi PVC — observability#2, ADR 0014); `gateway`/`api` via
-static targets, `workers` via Kubernetes pod-role service discovery
-(it has no Service, ADR 0009/0011), plus the Collector's own
-self-monitoring metrics. Grafana (own `grafana` namespace, no PVC, chart
+in live application logs. Traces land in Tempo (single-binary chart,
+own `tempo` namespace, 72h retention, 2Gi PVC — observability#3, ADR
+0015), the Collector's traces pipeline exporting `otlp/tempo` in place
+of ADR 0013's `debug` placeholder. Metrics flow the existing Boot
+actuator way: all three services expose `/actuator/prometheus` (needs
+`micrometer-registry-prometheus` + `management.endpoints.web.exposure.include`,
+not on by default — a real gap found deploying this), scraped by a
+plain `prometheus-community/prometheus` chart (own `prometheus`
+namespace, no Operator, 3-day retention, 2Gi PVC — observability#2, ADR
+0014); `gateway`/`api` via static targets, `workers` via Kubernetes
+pod-role service discovery (it has no Service, ADR 0009/0011), plus the
+Collector's own self-monitoring metrics. Logs are shipped by Alloy (a
+DaemonSet, own `alloy` namespace, explicit River pipeline reading pod
+logs via the Kubernetes API — no hostPath mount) into Loki
+(`Monolithic` mode, filesystem storage, own `loki` namespace, 72h
+retention, 2Gi PVC). Grafana (own `grafana` namespace, no PVC, charts
 sourced from `grafana-community/helm-charts` since the original
-`grafana/helm-charts` repo is deprecated) has the Prometheus datasource
-pre-provisioned; no dashboards or alerts built yet (backlog #20, M4).
+`grafana/helm-charts` repo is deprecated) has Prometheus, Loki, and
+Tempo pre-provisioned as datasources, with the Loki↔Tempo trace/log
+pivot wired via `derivedFields`/`tracesToLogsV2` — proven end to end
+with a real request's trace ID appearing in both. No metric→trace
+exemplar pivot yet (backlog #19a — needs Prometheus native histograms +
+a Micrometer bridge on all three services) and no dashboards or alerts
+built (backlog #20, M4).
 
-**Not yet:** Redis; Loki (log centralization); Tempo (trace backend —
-today's Collector only logs traces to stdout); Mimir (long-term/
-multi-tenant metrics storage, backlog #18a, a separate experiment not
+**Not yet:** Redis; Mimir (long-term/multi-tenant metrics storage,
+backlog #18a, a separate experiment not
 required for the single-node Prometheus already live).
 
 ## Boundaries
