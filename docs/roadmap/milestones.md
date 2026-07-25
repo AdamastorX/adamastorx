@@ -16,6 +16,7 @@ state.
 | **M2 Distributed Application** | Gateway + API + workers running, wired to Kafka, PostgreSQL, Redis. |
 | **M3 Observability** | Full telemetry pipeline (OTel → Prometheus/Mimir, Loki, Tempo) with baseline dashboards. |
 | **M4 Reliability** | SLOs, alerting, runbooks, failure testing — the system can be operated, not just run. |
+| **M5 Clinical Variant Annotation** | Real ClinVar/gnomAD-backed variant lookup, added alongside the work-item domain (ADR 0018) — the project's first skewed cache access pattern, invalidation-on-write, and data-provenance story. |
 
 A milestone is Done (Definition of Done, `.claude/PROJECT.md`) when every
 item in it is closed — that gate is unchanged. What's relaxed is only the
