@@ -12,10 +12,38 @@ Last updated: 2026-07-25.
 
 M2 Distributed Application: services#1 (gateway), services#2 (API),
 services#3 (Kafka, ADR 0011), and services#4 (PostgreSQL, ADR 0012) are
-done and closed. **services#5 (Redis) is the next open item** — see its
-issue body for the measurable-hypothesis requirement before implementing
-(this session's staff-eng review rewrote it; don't add Redis just
-because it's on the approved stack).
+done and closed. **services#5 (Redis, ADR 0016) is in flight — 3 PRs
+open, none merged yet, nothing deployed or verified against the real
+cluster:**
+- `adamastorx`: ADR 0016 (+ this note).
+- `platform`: `argocd/apps/redis.yaml` only — standalone chart, no PVC
+  (deliberate, cache-aside means Postgres stays the only source of
+  truth), auth kept on (chart default), deployed into `api`'s namespace
+  (single consumer + credential, same reasoning ADR 0012 used for
+  Postgres). Deliberately does **not** touch
+  `kubernetes/api/deployment.yaml` yet — no real image SHA exists to bump
+  to until the `services` PR below is merged and CI publishes one
+  (`docs/runbooks/cross-repo-rollout.md`'s ordering). That env-var
+  (`REDIS_HOST`/`REDIS_PASSWORD` secretKeyRef) + SHA-bump PR is the next
+  step once the `services` PR merges.
+- `services`: cache-aside for `GET /work-items/{id}` (hand-rolled
+  `RedisTemplate`, not `@Cacheable` — see ADR 0016 for why), hit/miss/error
+  Micrometer counters, a Testcontainers test that stops the Redis
+  container mid-test and proves the read still succeeds (fail-open).
+  Compiled locally (JDK 25, `./mvnw test-compile`); the Testcontainers
+  tests themselves were **not** run locally — no Docker in that sandbox —
+  so CI is the first real execution of them. Don't treat this as "tested"
+  until CI actually goes green.
+- ADR 0016 also has the honest answer to "is `GET /work-items/{id}` even
+  a good candidate": yes for the AC's actual requirements (hit/miss
+  metric, tested fail-open), no for demonstrating invalidation-on-write
+  specifically, since `work_items` has no update path to invalidate
+  against — stated plainly rather than picked around, per the issue's
+  own ask.
+- Once the `services` PR is merged: rest of the rollout checklist
+  (image SHA bump PR, ArgoCD sync, functional proof against the real
+  cluster, then — only once actually verified — the `docs/architecture/overview.md`
+  "Live today" addition and this note gets pruned).
 
 M3 Observability: **observability#1 (OTel tracing, ADR 0013, backlog
 #17), #2 (Prometheus + Grafana, ADR 0014, #18), #3 (Loki + Tempo +
