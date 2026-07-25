@@ -1,10 +1,12 @@
 # Architecture overview
 
 Status: M1 Platform Bootstrap complete; M2 Distributed Application in
-progress — the platform layer, CI, gateway, API, workers, Kafka, and
-PostgreSQL are live; Redis and the observability layers are still
-target-only. The diagram below shows the target shape, with a note
-underneath marking what exists today; it is the map, not the territory.
+progress (Kafka/PostgreSQL live, Redis still target-only); M3
+Observability under way — tracing (OpenTelemetry Collector) and metrics
+(Prometheus + Grafana) are live, logs (Loki) and long-term/multi-tenant
+metrics storage (Tempo, Mimir) are not. The diagram below shows the
+target shape, with a note underneath marking what exists today; it is
+the map, not the territory.
 
 ## Shape of the system
 
@@ -28,7 +30,7 @@ underneath marking what exists today; it is the map, not the territory.
 │  cert-manager (TLS) │                   ├─▶ Redis                  │
 │                     │                   └─▶ Kafka (KRaft) ─▶ Workers│
 │                                                                     │
-│  OpenTelemetry Collector ─▶ Prometheus/Mimir, Loki, Tempo ─▶ Grafana│
+│  OpenTelemetry Collector, Prometheus, Loki, Tempo, Mimir ─▶ Grafana │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -80,8 +82,31 @@ successful save leaves a work item persisted but never handed to
 `workers`. Flagged in ADR 0012, tracked as services#16 (transactional
 outbox / idempotent consumer), not fixed speculatively.
 
-**Not yet:** Redis; the entire observability row (OTel Collector,
-Prometheus/Mimir, Loki, Tempo, Grafana).
+**Observability (M3):** all three services (`gateway`/`api`/`workers`)
+export traces via Micrometer Tracing + OTLP to an OpenTelemetry
+Collector (observability#1, ADR 0013) deployed as an ArgoCD Application
+in its own `otel` namespace — a real trace ID correlates
+`gateway`→`api` (HTTP) and `api`→Kafka→`workers` (message hop), proven
+in live application logs. Traces land in the Collector's `debug`
+exporter (stdout) only for now — no backend (Tempo) yet, so "follow a
+trace" today means reading Collector pod logs. Metrics flow the
+existing Boot actuator way: all three services expose
+`/actuator/prometheus` (needs `micrometer-registry-prometheus` +
+`management.endpoints.web.exposure.include`, not on by default — a real
+gap found deploying this), scraped by a plain `prometheus-community/
+prometheus` chart (own `prometheus` namespace, no Operator, 3-day
+retention, 2Gi PVC — observability#2, ADR 0014); `gateway`/`api` via
+static targets, `workers` via Kubernetes pod-role service discovery
+(it has no Service, ADR 0009/0011), plus the Collector's own
+self-monitoring metrics. Grafana (own `grafana` namespace, no PVC, chart
+sourced from `grafana-community/helm-charts` since the original
+`grafana/helm-charts` repo is deprecated) has the Prometheus datasource
+pre-provisioned; no dashboards or alerts built yet (backlog #20, M4).
+
+**Not yet:** Redis; Loki (log centralization); Tempo (trace backend —
+today's Collector only logs traces to stdout); Mimir (long-term/
+multi-tenant metrics storage, backlog #18a, a separate experiment not
+required for the single-node Prometheus already live).
 
 ## Boundaries
 
