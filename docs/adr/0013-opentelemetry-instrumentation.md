@@ -23,18 +23,38 @@ entrypoint, ADR 0003). Nothing existed yet: no OTel dependency in
   All three services already depend on `spring-boot-starter-actuator`
   (Micrometer's home in Boot); Spring for Apache Kafka's built-in
   Micrometer Observation support for `KafkaTemplate`/`@KafkaListener`
-  auto-propagates trace context through record headers (W3C
-  `traceparent`) once an `ObservationRegistry` bean exists, and Boot's
-  observability autoconfiguration does the same for `RestClient` — both
-  hops that matter here (`gateway`→`api` HTTP, `api`→Kafka→`workers`)
-  get traced with dependency + config changes only, no code changes to
-  `WorkItemProducer`/`WorkItemListener`/the gateway's forwarding
-  controller. Rejected the OTel Java agent (`-javaagent` bytecode
-  auto-instrumentation): it works around frameworks instead of using
-  their native support, and would need bundling/updating an agent jar
-  and modifying the shared `Dockerfile`'s `ENTRYPOINT` — real added
-  complexity for no gain when the Spring-native path already covers
-  both hops.
+  can propagate trace context through record headers (W3C
+  `traceparent`), and Boot's observability autoconfiguration does the
+  same for `RestClient` automatically. Rejected the OTel Java agent
+  (`-javaagent` bytecode auto-instrumentation): it works around
+  frameworks instead of using their native support, and would need
+  bundling/updating an agent jar and modifying the shared `Dockerfile`'s
+  `ENTRYPOINT` — real added complexity for no gain when the
+  Spring-native path already covers both hops.
+  - **Correction, found deploying this for real**: "no code changes"
+    was wrong for the Kafka hop specifically. `api`/`workers` hand-build
+    their `KafkaTemplate`/listener container factory beans
+    (`WorkItemProducerConfig`/`WorkItemConsumerConfig` — typed
+    `KafkaTemplate<String,WorkItem>` instead of Boot's untyped default,
+    custom ack mode), bypassing Boot's autoconfiguration entirely. The
+    `spring.kafka.template.observation-enabled`/
+    `spring.kafka.listener.observation-enabled` properties (default
+    `false`) only wire observation into *Boot's own* auto-configured
+    beans — they're silent no-ops for hand-built ones. Fixed with an
+    explicit `setObservationEnabled(true)` call on both beans. Caught
+    by checking `workers`' actual consumption logs: `api`'s own
+    request-handling span had a real trace ID, `WorkItemListener`'s
+    didn't, once the OTLP export path itself started working (see
+    below).
+  - **Second correction, same deploy**: the property to configure the
+    OTLP endpoint is `management.opentelemetry.tracing.export.otlp.endpoint`,
+    not `management.otlp.tracing.endpoint` — the latter is deprecated
+    at error level since Boot 4.0 and silently binds to nothing (no
+    startup error, since it's just an unused property; no export
+    error either, since nothing was ever configured to export). Found
+    by reading Boot's own `spring-configuration-metadata.json` after
+    spans still weren't reaching the Collector with the
+    seemingly-obvious property name.
 - **Traces**: OTLP HTTP push to a Collector
   (`management.otlp.tracing.endpoint`), **100% sampling**
   (`management.tracing.sampling.probability: 1.0`) — a single-node dev
@@ -95,12 +115,22 @@ entrypoint, ADR 0003). Nothing existed yet: no OTel dependency in
 ## Consequences
 
 - `gateway`/`api`/`workers` each gain a new outbound dependency (the
-  Collector) and two new Maven dependencies apiece; the OTLP exporter is
-  fire-and-forget like the Kafka producer, not fail-fast like Flyway, so
-  this shouldn't need the same "give CI a live dependency" treatment
-  Postgres needed — to be confirmed empirically during implementation,
-  not assumed, given how many Boot-4-modularized-autoconfiguration
-  surprises this session already hit for seemingly-similar assumptions.
+  Collector) and two new Maven dependencies apiece; **confirmed** the
+  OTLP exporter is fire-and-forget like the Kafka producer, not
+  fail-fast like Flyway — `gateway`/`workers` booted and passed their
+  tests with no Collector present at all, no CI smoke-test changes
+  needed, unlike Postgres.
+- **Deploy-time env var naming pitfall, found the hard way**: the
+  override env var was first named `OTEL_EXPORTER_OTLP_ENDPOINT`
+  (seemed like the "standard" OTel name) — but that's a *reserved* name
+  the OTel SDK's own `autoconfigure-spi` module (pulled in transitively
+  by `opentelemetry-exporter-otlp`) reads directly and independently of
+  Spring's property system, treating it as a base URL and appending
+  `/v1/traces` a second time. Result: every export silently 404'd on
+  `/v1/traces/v1/traces`, logged as a `WARN`, easy to miss. Renamed to
+  `OTLP_COLLECTOR_ENDPOINT`. Lesson for any future OTel-adjacent env
+  var: avoid the `OTEL_*` prefix entirely for app-specific overrides,
+  it's namespace the SDK itself claims.
 - The Collector's `debug` exporter is genuinely a placeholder: nothing
   persists trace data yet, so "follow a trace" today means reading
   Collector pod logs, not clicking through a UI. That gap closes with
