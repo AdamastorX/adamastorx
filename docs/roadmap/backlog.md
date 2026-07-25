@@ -200,3 +200,49 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
   6. ArgoCD drift (manual cluster change reverted by selfHeal, or blocked/flagged if prune is off).
 - Dependencies: #22.
 - Priority: P1. Labels: `observability`, `platform`.
+
+---
+
+## M5 Clinical Variant Annotation
+
+**24. Add clinical variant annotation lookup endpoint**
+- Purpose: Expose the M5 variant annotation capability from ADR 0018 — query by chrom/pos/ref/alt or rsID and get back ClinVar clinical significance, optionally enriched with gnomAD chr21/chr22 allele frequency. Added alongside the existing synthetic work-item domain, not replacing it.
+- Acceptance Criteria: Endpoint in `api` accepts chrom/pos/ref/alt OR rsID (mutually exclusive, not both). Response includes clinical significance and, when available, gnomAD allele frequency, plus the ClinVar release identifier behind the answer. Integration test covers both lookup key styles and a not-found case, against a known variant (e.g. rs80357906, BRCA1) with an asserted expected classification.
+- Dependencies: #25, #26, #28.
+- Priority: P0. Labels: `backend`.
+
+**25. ClinVar GRCh38 ingestion pipeline with release tracking**
+- Purpose: Close the project's previously-flagged provenance gap — ingest ClinVar's GRCh38 VCF on a recurring schedule and persist which release (version/date, parsed from the VCF's own header, not file mtime) backs each stored record.
+- Acceptance Criteria: Ingestion runs inside the existing `workers` shape (no Kubernetes Job) via an in-process scheduled trigger, downloads and tabix-indexes the VCF, records a `clinvar_release` row with header-derived `published_date` and a variant count matching the source file. A manual admin-triggered re-ingestion path exists for dev/CI. Re-ingesting a new release does not destroy provenance of previously served/cached answers. Ingestion failures are observable, not silent.
+- Dependencies: #27.
+- Priority: P0. Labels: `backend`.
+
+**26. Release-aware cache invalidation for variant lookups**
+- Purpose: Introduce the project's first real invalidation-on-write cache behavior. Existing caching (#15, Redis, ADR 0016) is TTL-only; variant lookups must actively invalidate when a new ClinVar release changes a cached variant's classification, not merely expire.
+- Acceptance Criteria: On a completed ingestion (#25), only cache entries actually present in Redis are diffed against the new release (not a full-dataset diff) and evicted where classification changed. Invalidation-triggered eviction is a distinct, independently observable Micrometer counter from TTL expiry. Test proves a seeded stale entry is evicted immediately following a new-release ingest, verified via the counter and a live Redis check, not mocked.
+- Dependencies: #25, #15.
+- Priority: P0. Labels: `backend`.
+
+**27. ClinVar/gnomAD storage footprint and refresh scheduling**
+- Purpose: Provision where the ingested ClinVar (weekly) and gnomAD chr21/chr22 slice (infrequent) data lives, sized and scheduled — the first non-trivial-volume dataset and the first time `workers` becomes stateful.
+- Acceptance Criteria: Shared RWX PVC mounted on both `api` and `workers`, sized from measured artifact size with headroom for a download-then-swap so a partially-written release is never served; `workers` pinned to a single replica (documented consequence of a node-pinned `local-path` PVC). Data survives a pod restart with no re-download (verified via checksum/mtime before and after `kubectl delete pod`). A `dev` values overlay points ingestion at a small CI fixture instead of NCBI for scratch-cluster bring-up.
+- Dependencies: none.
+- Priority: P0. Labels: `platform`.
+
+**28. Release-ID propagation through OTel trace correlation**
+- Purpose: Extend the existing trace-correlation path (ADR 0013/0015) so the ClinVar release behind any given answer is visible end-to-end, not just stored at the data layer.
+- Acceptance Criteria: Release ID stamped once into a single shared field at response-assembly time, surfaced as a `clinvar.release_id` span attribute (confirmed search-enabled in Tempo, not assumed) and a bounded-cardinality metric tag derived from the same field — not computed independently in two places. Visible in Loki as structured metadata, same pattern as `trace_id`/`span_id`. Verified live: a real request's trace ID shows the release attribute in Tempo, pivots to the matching Loki log line, and the Prometheus counter carries the same value.
+- Dependencies: #24, #25.
+- Priority: P1. Labels: `backend`, `observability`.
+
+**29. Grafana dashboard + alert: variant-lookup access pattern and invalidation correctness**
+- Purpose: Give visibility into the project's first genuinely skewed cache access pattern and its invalidation-on-write behavior (#26), neither of which the existing golden-signal/TTL-only dashboards capture — and alert on the one failure mode here that's a correctness issue, not just a performance one.
+- Acceptance Criteria: Dashboard contrasts `workItemCache` vs `variantAnnotationCache` hit/miss/error rate, a bounded top-N-hot-keys-vs-long-tail panel (not a raw per-variant label), invalidation-event rate by reason, and cache-entry-age distribution. One alert ships with this item, not deferred to #21: `ClinVarInvalidationLag`, firing on invalidation-job failure or a served entry older than the latest completed release by more than a 15-minute sweep window, with a linked runbook. Every other new panel stays explicitly labeled in-panel as a stepping-stone toward #21, matching the precedent #20 already set. Verified with real synthetic traffic shaped like each domain, and a staged invalidation failure confirmed to fire the alert inside the window.
+- Dependencies: #26, #27.
+- Priority: P1. Labels: `observability`.
+
+**30. Reserve M6 — real batch/alignment pipeline (placeholder, tracking only)**
+- Purpose: Explicitly reserve the milestone that actually closes the project's remaining architectural gap (no object-storage/batch-Job data plane) — a real alignment pipeline on real FASTQ data, self-hosted MinIO, Kubernetes Jobs or a workflow engine — so it isn't left as vague "eventual" work. Raised directly by the Staff Bioinformatician's review of ADR 0018, against the specific failure mode of stopping at "portfolio project with a bio-flavored coat of paint."
+- Acceptance Criteria: Stays open and unscheduled until a dedicated future ADR defines its concrete scope; must not be closed as part of M5 work. Cross-referenced from ADR 0018 as the commitment mechanism for the reserved milestone.
+- Dependencies: none — intentionally unscoped placeholder.
+- Priority: P2. Labels: `architecture`.
