@@ -72,11 +72,13 @@ future ADR's call to make deliberately, not a side effect of this one.
 Concretely, this milestone (**M5 — Clinical Variant Annotation**) adds:
 
 - **A lookup endpoint in `api`**, accepting `(chrom, pos, ref, alt)` or an
-  rsID, returning clinical significance from ClinVar and, optionally,
-  population allele frequency from a gnomAD chr21/chr22 slice (a
-  deliberately bounded subset, not the full genome — keeps M5's storage
-  and ingestion footprint small; broader chromosome coverage is a future
-  call, not part of this one). rsID lookups resolve through a small
+  rsID, returning clinical significance from ClinVar.
+  **Correction (ADR 0021, simplification pass)**: the gnomAD
+  chr21/chr22 enrichment planned in this paragraph was never built and
+  is now explicitly cut — its real footprint (~7.7GB, not the "few
+  hundred MB" assumed below) doesn't fit this single-node cluster, and
+  it added a second data source with no new SRE/platform signal.
+  ClinVar is the sole annotation source. rsID lookups resolve through a small
   Postgres index table (`clinvar_variant_index`) populated during
   ingestion, since tabix indexes are position-based — scanning 250MB per
   rsID lookup is a non-starter.
@@ -224,3 +226,8 @@ Concretely, this milestone (**M5 — Clinical Variant Annotation**) adds:
   warned against: the project stopping at "portfolio project with a
   bio-flavored coat of paint" instead of demonstrating the harder
   batch/object-storage story it's actually capable of.
+  **Correction (ADR 0021, simplification pass)**: M6 (backlog #30) is
+  closed instead, not reserved. Going deeper into a batch/object-storage
+  bioinformatics pipeline was judged to extend the "bio coat of paint"
+  concern this paragraph raised, not resolve it, for a portfolio whose
+  stated audience is SRE/platform, not bioinformatics. See ADR 0021.
