@@ -10,8 +10,47 @@ Last updated: 2026-07-26.
 
 ## Where things stand
 
-**Backlog #21 (SLOs + alerting) and #21c (Alertmanager receiver) implemented,
-PR open, not yet merged.** `argocd/apps/prometheus.yaml`:
+**Simplification pass executed (ADR 0021).** The user asked to argue for
+maximum simplification — remove anything that doesn't earn its
+complexity. A staff-engineer audit found `gateway` had exactly one
+route (a placeholder from M1, never wired to real traffic) while
+carrying a full tax (its own module, CI pipeline, namespace, ArgoCD
+Application, Ingress, TLS cert) — the same shape as `whoami`, the
+original one-time Traefik+TLS proof, now redundant. Both **removed
+entirely, verified live**: `services/gateway` and `platform/kubernetes/
+{gateway,whoami}` deleted, both namespaces deleted from the live
+cluster, `api` given its own Ingress+cert (`api.local.adamastorx.dev`,
+`adamastorx-ca`), confirmed reachable through Traefik with real TLS
+(`curl --resolve ... --cacert adamastorx-ca.crt` → `200`). Also cut:
+gnomAD enrichment (never built, ~7.7GB real size didn't fit this
+cluster), M6 (backlog #30, the reserved FASTQ/alignment milestone —
+judged to extend the "bio coat of paint" risk rather than resolve it),
+HGVS/liftover (#40/#41 — bio depth for a bio audience, no new SRE
+signal), and several M4 items that read as ceremony for a solo project
+(#21b burn-rate policy, #33 solo postmortems, #34 laptop load-testing,
+#23b folded into #23a, chaos trimmed from 7 scenarios to 3). `#38`/`#39`
+(real correctness bugs/fixes) and the ClinVar provenance/invalidation
+story were explicitly kept — judged the project's most defensible
+portfolio content, not cut for cutting's sake.
+
+**Real incident found executing this**: after the resource-governance
+work (backlog #35) added a 500m CPU limit to `api`, a routine rollout
+got stuck in `CrashLoopBackOff` for 95 minutes — `kubectl top pod`
+confirmed the new pod pegged at 498m/500m (cgroup-throttled) during
+JVM cold start (Hibernate/Flyway/Kafka bootstrapping), missing the
+liveness probe's 80s budget every single time, while the old pod kept
+serving traffic the whole time (rolling-update default masks this kind
+of stuck deploy from being visibly "down"). Fixed by raising `api`'s
+CPU limit to 1 core (and the namespace's `ResourceQuota` to match) —
+confirmed live: new pod `1/1 Running`, 0 restarts, steady-state usage
+~30m, nowhere near the new ceiling. **Lesson**: a CPU limit sized from
+steady-state usage alone can starve a JVM's cold start even when
+steady-state headroom looks generous — check an actual cold start
+under the proposed limit, not just steady-state `kubectl top`, before
+trusting a resource-governance change on any JVM workload.
+
+**Backlog #21 (SLOs + alerting) and #21c (Alertmanager receiver) implemented
+and merged.** `argocd/apps/prometheus.yaml`:
 `alertmanager.enabled` flipped to `true`, seven alert rules added under
 `server.serverFiles.alerting_rules.yml` (one per ADR 0020 SLO-table row,
 except clinvar-service's lookup non-5xx — see gap below), Alertmanager's
