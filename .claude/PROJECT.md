@@ -50,15 +50,21 @@ intentionally small.
 
 ## Current milestone
 
-**M2 Distributed Application** (M1 complete). M1 done: platform#1 (k3s),
-platform#2 (ArgoCD), platform#3 (Traefik + cert-manager), platform#4 (CI
-pipeline skeleton), platform#5 (container build/publish), platform#6 (Trivy
-scanning). M2 in progress: services#1 (gateway), services#2 (API, gateway
-forwarding wired per ADR 0010), services#3 (Kafka — async produce/consume
-and multi-replica consumer-group rebalance both proven against the real
-cluster, ADR 0011), and services#4 (PostgreSQL — JPA/Flyway, real PVC,
-proven against the real cluster, ADR 0012) all done; services#5 (Redis)
-remaining. See `docs/roadmap/milestones.md`.
+**M4 Reliability** in progress (M0-M3 and M5 complete/verified live).
+M2 Distributed Application: done — gateway, API, workers wired to Kafka
+(ADR 0011), PostgreSQL (ADR 0012), and Redis cache-aside (services#5, ADR
+0016). M3 Observability: done — OTel tracing (ADR 0013), Prometheus/Grafana
+(ADR 0014), Loki/Tempo/Alloy (ADR 0015), golden-signal dashboards (ADR
+0017), all proven against the real cluster. M5 Clinical Variant Annotation:
+done — `clinvar-service` (Python/FastAPI, ADR 0019, superseding ADR 0018's
+original in-Java design after two real cross-namespace bugs) verified live
+end to end (`rs80357906` → BRCA1, `"Pathogenic"`). M4 Reliability
+(ADR 0020) is now the active milestone: real histogram/consumer-lag/
+`clinvar-service` metrics (backlog #21a) are the current prerequisite,
+ahead of SLOs/alerting (#21), runbooks (#22), and chaos scenarios (#23).
+See `docs/roadmap/milestones.md` and `docs/SESSION_STATE.md` for exactly
+what's in flight right now — this section is a point-in-time summary, that
+file is the current source of truth.
 
 ## Repository map
 

@@ -1,6 +1,6 @@
 # Backlog
 
-23 issues, grouped by epic within each milestone. No implementation detail —
+Grouped by epic within each milestone. No implementation detail —
 that's decided when the issue is picked up (Understand → Design in
 `.claude/WORKFLOW.md`). Priority: P0 (blocking milestone), P1 (needed for
 milestone), P2 (nice to have, can slip).
@@ -208,6 +208,12 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Dependencies: #22.
 - Priority: P1. Labels: `observability`, `platform`.
 
+**23a. Backup and restore procedure for stateful data**
+- Purpose: No stateful component has a documented or automated backup/restore path — `api`'s PostgreSQL (`work_items`), `clinvar-service`'s dedicated PostgreSQL (`clinvar_release`/`clinvar_variant_index`), Loki, and Tempo are all a single node-pinned `local-path` PVC each on the one k3s node, with no `pg_dump`, snapshot, or off-node copy anywhere. A disk failure or an accidental `kubectl delete pvc`/`helm uninstall` currently means silent, total, unrecoverable data loss with no runbook to even attempt recovery — a gap that fell through the cracks because it's nobody's specific milestone item (M2 built the databases, M4's other items are scoped to alerting/chaos, not backup) and no single persona's remit names it explicitly.
+- Acceptance Criteria: A documented decision (ADR or runbook) on backup approach for at minimum the two PostgreSQL instances — a `pg_dump` CronJob writing to a second local PVC is sufficient for this project's actual stakes; explicitly stating Loki/Tempo telemetry data is *not* backed up (acceptable, since it's regenerable observability data, not source-of-truth state) is a valid answer too, as long as it's a stated decision and not a silent gap. A restore is proven at least once — into a fresh PVC/instance, with row counts verified to match. The blast radius this doesn't protect against (loss of the single node/disk itself, which no on-node backup survives) is stated explicitly as an accepted risk for a personal single-node project, not an implicit, undiscussed assumption.
+- Dependencies: none — can start independently of #21a/#21/#22/#23.
+- Priority: P1. Labels: `platform`, `documentation`.
+
 ---
 
 ## M5 Clinical Variant Annotation
@@ -250,3 +256,25 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Acceptance Criteria: Stays open and unscheduled until a dedicated future ADR defines its concrete scope; must not be closed as part of M5 work. Cross-referenced from ADR 0018 as the commitment mechanism for the reserved milestone.
 - Dependencies: none — intentionally unscoped placeholder.
 - Priority: P2. Labels: `architecture`.
+
+---
+
+## Cross-cutting
+
+Items that don't belong to one milestone's feature scope — raised by an
+independent staff-engineer-level review of the whole project (all four
+repos, not one persona's remit) rather than by a specific epic's own
+backlog. Same format, same discipline; no milestone gates these, they can
+be picked up whenever.
+
+**31. Top-level "what this project demonstrates" narrative doc**
+- Purpose: The project's actual throughline — real incidents found and fixed live (namespace-scoped Secret/PVC sharing breaking twice, a Bitnami chart's auto-generated Secret silently regenerating, a double-ingestion race with no OOM evidence anywhere, four separate Spring Boot 4 autoconfiguration gotchas), a deliberate architecture pivot (ADR 0018 → ADR 0019) with the reasoning kept rather than erased, and what each milestone was actually chosen to prove — is currently only reconstructable by reading all ~20 ADRs plus `docs/SESSION_STATE.md` end to end. A hiring manager skimming the repo sees a feature list (README's Vision/Repository map) but not the connective narrative that is the actual portfolio value: the judgment calls, not just the tool list.
+- Acceptance Criteria: One doc (e.g. `docs/WHY.md`) that names, in a few hundred words, the real bugs found and fixed, the ADR 0018→0019 pivot and why it happened, and the one-line "what this milestone proves" for each of M0-M5 — written for someone who will not read the ADRs, linking out to them for anyone who wants the detail. Linked prominently from the top-level README, not buried in `docs/`.
+- Dependencies: none.
+- Priority: P2. Labels: `documentation`.
+
+**32. Keep `.claude/PROJECT.md`'s "Current milestone" section refreshed as a routine step, not an afterthought**
+- Purpose: `PROJECT.md` calls itself "the stable picture" other repos point back to instead of duplicating, and `.claude/WORKFLOW.md`'s "Post-merge sweep" already names `.claude/PROJECT.md`'s current-state sections as something the `documentation-engineer` agent checks after any merge with architectural/operational impact — but in practice it wasn't: this section was last updated at services#4 and still read "Current milestone: M2 ... services#5 remaining" after Redis (services#5), all of M3, and all of M5 had shipped and `docs/architecture/overview.md` had been refreshed many times over in the same window. The documented process exists on paper; nothing catches it silently not running. Fixed directly as part of this review's own PR — this item is about making it stick, not the one-time correction.
+- Acceptance Criteria: The post-merge sweep step in `.claude/WORKFLOW.md` gets a concrete, checkable trigger (e.g. any PR that closes a backlog item or completes a milestone must touch `PROJECT.md`'s "Current milestone" section in the same PR, checked in the `CONTRIBUTING.md` PR checklist, not left to a separate sweep that can be silently skipped). A second full pass confirms no other "canonical" doc (this file, `docs/architecture/overview.md`, README) has silently drifted the same way right now.
+- Dependencies: none.
+- Priority: P2. Labels: `documentation`.
