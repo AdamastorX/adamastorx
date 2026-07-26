@@ -189,12 +189,8 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Dependencies: #21a.
 - Priority: P0. Labels: `observability`.
 
-**21b. Error-budget policy and multi-window burn-rate alerts**
-> Simplification proposed (S7, ADR 0021): CUT — enterprise/multi-team ritual; you can't meaningfully burn a budget against traffic you generate yourself. #21's per-SLO alerts are the right altitude.
-- Purpose: #21 defines each SLO's target; nothing yet defines what happens once the budget is spent, or fires an alert fast enough to matter before it's gone. A single instantaneous-rate-exceeds-threshold alert (the naive shape #21 stops short of) either fires too late (a slow multi-week burn never crosses a moment-in-time threshold) or too often (a short self-resolving spike trips it needlessly) — the exact failure mode the SRE workbook's multi-window burn-rate method exists to replace.
-- Acceptance Criteria: for each SLO in ADR 0020's table (`gateway`/`api`/`workers`/`clinvar-service`), a fast-burn (short window, high burn-rate multiple) and slow-burn (long window, lower multiple) alert pair, added to the same `serverFiles.alerting_rules.yml` ADR 0020 already established — no new alerting mechanism. A written error-budget policy (`observability/runbooks/` or `docs/`) states what "budget exhausted" means operationally for a single-operator project (a stated change freeze on the affected service until budget recovers, not aspirational), who lifts it, and where remaining budget is checked (a Grafana panel, not a mental estimate).
-- Dependencies: #21.
-- Priority: P1. Labels: `observability`.
+**21b. ~~Error-budget policy and multi-window burn-rate alerts~~ — CLOSED, simplification (ADR 0021)**
+- Multi-window burn-rate alerting is an enterprise/multi-team ritual for detecting a slow-burning error budget across shared, externally-generated traffic. On a single-operator project whose traffic is self-generated (manual/test requests, not real users), there is no budget to unknowingly burn — #21's per-SLO threshold alerts are already the right altitude for this project's actual scale. Closed rather than built as unearned complexity.
 
 **21c. Wire Alertmanager to a real notification channel with severity routing**
 - Purpose: ADR 0020 enabled Alertmanager but shipped it with no external receiver, stated openly as deferred rather than assumed away — an alert today is only visible to someone already looking at Alertmanager's or Grafana's own UI, which defeats the point of alerting for a project with no one watching a dashboard continuously. ADR 0020 names a real destination as the only thing blocking this, not a design question.
@@ -221,45 +217,28 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Priority: P0. Labels: `documentation`, `observability`.
 
 **23. Chaos / failure-injection test plan**
-> Simplification proposed (S6, ADR 0021): TRIM from seven scenarios to three (Kafka down, Postgres/PVC full, consumer-lag). Scenarios 4–7 re-exercise the same muscle without a new SRE signal.
 - Purpose: Confidence that the alerts and runbooks actually work, proven before a real incident does it for us — and a source of real evidence (logs, metrics, screenshots) for writeups, not a narrative constructed after the fact.
-- Acceptance Criteria: Seven concrete scenarios, each producing: a signal, a dashboard, an alert, a runbook, proof of the fault injection, proof of recovery, and a fact pack (commands run, timestamps, screenshots) usable for an article:
+- Acceptance Criteria (trimmed to three scenarios, ADR 0021/S6 — the original seven's scenarios 4-7 re-exercised the same "does an alert fire and route correctly" muscle without a genuinely new SRE signal): each of the three below produces a signal, a dashboard, an alert, a runbook, proof of the fault injection, proof of recovery, and a fact pack (commands run, timestamps, screenshots) usable for an article:
   1. Kafka broker unavailable (produce/consume path).
   2. PostgreSQL unavailable, and separately, PVC full.
   3. Consumer group lag (workers falling behind `work-items`).
-  4. Poison message / dead-letter topic triggered.
-  5. Readiness probe failing (traffic correctly stops routing).
-  6. ArgoCD drift (manual cluster change reverted by selfHeal, or blocked/flagged if prune is off).
-  7. `clinvar-service`'s dedicated Postgres/PVC unavailable during a live `/variants/lookup` call (ADR 0020) — proves the failure degrades that path only (`work-items` unaffected) and that the node-pinned `local-path` PVC's known consequence (can't reschedule onto another node) is observed directly, not assumed.
 - Dependencies: #22.
 - Priority: P1. Labels: `observability`, `platform`.
 
 **23a. Backup and restore procedure for stateful data**
 - Purpose: No stateful component has a documented or automated backup/restore path — `api`'s PostgreSQL (`work_items`), `clinvar-service`'s dedicated PostgreSQL (`clinvar_release`/`clinvar_variant_index`), Loki, and Tempo are all a single node-pinned `local-path` PVC each on the one k3s node, with no `pg_dump`, snapshot, or off-node copy anywhere. A disk failure or an accidental `kubectl delete pvc`/`helm uninstall` currently means silent, total, unrecoverable data loss with no runbook to even attempt recovery — a gap that fell through the cracks because it's nobody's specific milestone item (M2 built the databases, M4's other items are scoped to alerting/chaos, not backup) and no single persona's remit names it explicitly.
-- Acceptance Criteria: A documented decision (ADR or runbook) on backup approach for at minimum the two PostgreSQL instances — a `pg_dump` CronJob writing to a second local PVC is sufficient for this project's actual stakes; explicitly stating Loki/Tempo telemetry data is *not* backed up (acceptable, since it's regenerable observability data, not source-of-truth state) is a valid answer too, as long as it's a stated decision and not a silent gap. A restore is proven at least once — into a fresh PVC/instance, with row counts verified to match. The blast radius this doesn't protect against (loss of the single node/disk itself, which no on-node backup survives) is stated explicitly as an accepted risk for a personal single-node project, not an implicit, undiscussed assumption.
+- Acceptance Criteria: A documented decision (ADR or runbook) on backup approach for at minimum the two PostgreSQL instances — a `pg_dump` CronJob writing to a second local PVC is sufficient for this project's actual stakes; explicitly stating Loki/Tempo telemetry data is *not* backed up (acceptable, since it's regenerable observability data, not source-of-truth state) is a valid answer too, as long as it's a stated decision and not a silent gap. A restore is proven at least once — into a fresh PVC/instance, with row counts verified to match, and the elapsed time for that restore recorded as a real, measured RTO (not estimated) — the node-pinned PVC's known consequence (a real game-day rehearsal of losing the whole k3s node is ceremony on a single-node laptop cluster, per ADR 0021/S7: the same "single node/disk loss is unrecoverable on-node" acceptance and the same restore-timing ask covers it without a separate exercise) is stated explicitly as an accepted risk for a personal single-node project, not an implicit, undiscussed assumption.
 - Dependencies: none — can start independently of #21a/#21/#22/#23.
 - Priority: P1. Labels: `platform`, `documentation`.
 
-**23b. Node-loss/DR game-day, proven restore, and an explicit accepted-risk statement**
-> Simplification proposed (S7, ADR 0021): MERGE into #23a — a "kill the one node" game-day on a single-node laptop is ceremony; #23a already documents node-loss as accepted risk and proves a restore. Keep only its RTO/RPO-measurement ask, folded into #23a.
-- Purpose: consolidates two independently-reached recommendations (a Staff SRE review and a Staff Platform Engineer review, run separately, converging on the same gap). #23a documents a backup approach and proves a restore once into a fresh instance, but doesn't yet rehearse the actual disaster it exists for: the loss of the one k3s node itself, since every PVC here (`local-path`) is node-pinned with no cross-node replication. Both reviews independently flagged that "single node/disk loss is unrecoverable on-node" needs to be a stated, accepted decision, not an implicit assumption nobody has actually rehearsed end to end.
-- Acceptance Criteria: a documented decision (an ADR, or an addition to #23a's runbook) stating explicitly that single node/disk loss is unrecoverable on-node, accepted as a reasonable risk for a personal single-node project, paired with #23a's proven `pg_dump`-based restore as the actual mitigation. A real game-day exercise: kill the node (or its PVC, whichever is safely simulable on this cluster) and rehearse restoring from #23a's backup into a fresh PVC/node, with real, measured RTO and RPO recorded from the exercise itself, not estimated in the abstract.
-- Dependencies: #23a.
-- Priority: P1. Labels: `platform`, `documentation`.
+**23b. ~~Node-loss/DR game-day, proven restore, and an explicit accepted-risk statement~~ — MERGED into #23a (ADR 0021/S7)**
+- A dedicated "kill the node" game-day is ceremony on a single-node laptop cluster where #23a already documents node-loss as an accepted risk and proves a restore. Its one genuinely distinct ask — recording a real, measured restore time rather than an estimate — is folded into #23a's own acceptance criteria above. No separate exercise needed.
 
-**33. Blameless postmortems for the three real incidents already lived**
-> Simplification proposed (S7, ADR 0021): CUT — duplicates ADRs 0018/0019 + `SESSION_STATE.md`; a solo "blameless" postmortem is a solo writeup. The narrative value is already #31's job.
-- Purpose: three real production incidents have already happened and been fixed live — the SIGKILL-with-no-OOM-evidence double-ingestion incident (services#36, `dmesg`/`journalctl` all checked clean, see `docs/SESSION_STATE.md`), the Postgres Secret drift (platform#34), which recurred a second time immediately after platform#40's `ignoreDifferences` fix landed, and the ADR 0018→0019 namespace-bug architecture pivot (a PVC, then a Secret, neither shareable cross-namespace) — but none has a dedicated postmortem; each is only reconstructable today by reading ADRs and `SESSION_STATE.md`'s scattered notes end to end.
-- Acceptance Criteria: a new `/postmortems` directory (repo root or `docs/postmortems/`), one Markdown doc per incident covering timeline, impact, root cause, and action items already taken — cross-referencing services#36, platform#34/#40, and ADR 0018/0019 respectively rather than duplicating their content. Blameless in the literal sense: framed around process/signal gaps (no metric existed, a workaround masked a root cause), not individual fault.
-- Dependencies: none.
-- Priority: P2. Labels: `documentation`, `observability`.
+**33. ~~Blameless postmortems for the three real incidents already lived~~ — CLOSED, simplification (ADR 0021)**
+- Duplicates content already living in ADRs 0018/0019 and `docs/SESSION_STATE.md`. A "blameless" postmortem process exists to remove blame friction across a team; for a solo project that friction doesn't exist, so a dedicated postmortem doc is a second writeup of the same incident, not new information. The narrative value this was chasing is `#31`'s job (the top-level "what this project demonstrates" doc), not a `/postmortems` directory.
 
-**34. Capacity baseline: real load test establishing measured p95 and ingestion-duration distribution**
-> Simplification proposed (S7, ADR 0021): CUT — load-testing self-generated traffic on one laptop node measures the laptop, not a capacity baseline. The ~90s ingestion figure is already a real measured number #21 can cite.
-- Purpose: #21's latency SLOs and ADR 0020's ingestion-duration-anomaly alert both need a real number to compare against; today the only reference point is the informal "~90s baseline" in ADR 0020/`SESSION_STATE.md`'s incident notes and code comments — a single anecdotal observation, not a measured distribution. Setting a p95 threshold or an anomaly multiplier against that risks the exact mistake ADR 0020 already named: picking a threshold against the wrong number.
-- Acceptance Criteria: a repeatable load test (k6 or vegeta) against `gateway`/`api`/`workers` under representative traffic, plus repeated real ClinVar ingestion runs (or a controlled subset) capturing the actual ingestion-duration distribution. Results recorded in a doc or committed artifact and cross-referenced from #21/ADR 0020 as the source the thresholds actually trace back to, replacing "~90s" with a real measured number.
-- Dependencies: #21a.
-- Priority: P2. Labels: `observability`.
+**34. ~~Capacity baseline: real load test establishing measured p95 and ingestion-duration distribution~~ — CLOSED, simplification (ADR 0021)**
+- Load-testing self-generated synthetic traffic on a single laptop node measures the laptop's own ceiling, not a real capacity baseline against real user demand — there is no real demand signal here to baseline against. The ~90s ClinVar ingestion figure already cited in ADR 0020/`SESSION_STATE.md` is a real measured number from an actual production-data ingestion run, sufficient for the anomaly alert it backs; a dedicated k6/vegeta exercise adds ceremony without a new number worth having.
 
 **35. Namespace resource governance: `LimitRange` + `ResourceQuota` + a CI check**
 - Purpose: `api`/`workers` have memory limits set but no CPU limits anywhere in their manifests today, except `clinvar-service` (`platform/kubernetes/clinvar-service/deployment.yaml`, which sets both) — a runaway CPU-bound process in `api`/`workers`/`gateway` has no ceiling, and no namespace has a `ResourceQuota` capping total consumption either, on a single-node cluster where one namespace's runaway pod affects every other namespace's remaining capacity.
@@ -283,19 +262,14 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 
 ## M5 Clinical Variant Annotation
 
-**24. Add clinical variant annotation lookup endpoint**
-> Simplification proposed (S3, ADR 0021): drop gnomAD enrichment — the endpoint returns ClinVar significance + release id only. If S3 is accepted, this item's gnomAD clauses fall away; the ClinVar lookup itself stays.
-- Purpose: Expose the M5 variant annotation capability from ADR 0018 — query by chrom/pos/ref/alt or rsID and get back ClinVar clinical significance, optionally enriched with gnomAD chr21/chr22 allele frequency. Added alongside the existing synthetic work-item domain, not replacing it.
-- Acceptance Criteria: Endpoint in `api` accepts chrom/pos/ref/alt OR rsID (mutually exclusive, not both). Response includes clinical significance and, when available, gnomAD allele frequency, plus the ClinVar release identifier behind the answer. Integration test covers both lookup key styles and a not-found case, against a known variant (e.g. rs80357906, BRCA1) with an asserted expected classification.
+**24. Add clinical variant annotation lookup endpoint — DONE, gnomAD dropped (ADR 0021/S3)**
+- Purpose: Expose the M5 variant annotation capability from ADR 0018 — query by chrom/pos/ref/alt or rsID and get back ClinVar clinical significance. ClinVar is the sole annotation source (gnomAD enrichment dropped, ADR 0021/S3 — never built, ~7.7GB real footprint doesn't fit this single-node cluster, and it added a second data source with no new SRE/platform signal). Added alongside the existing synthetic work-item domain, not replacing it.
+- Acceptance Criteria: Endpoint in `api` accepts chrom/pos/ref/alt OR rsID (mutually exclusive, not both). Response includes clinical significance and the ClinVar release identifier behind the answer. Integration test covers both lookup key styles and a not-found case, against a known variant (e.g. rs80357906, BRCA1) with an asserted expected classification. Done and verified live.
 - Dependencies: #25, #26, #28.
 - Priority: P0. Labels: `backend`.
 
-**24a. Rescope gnomAD enrichment to remote tabix range queries, not a full download**
-> Simplification proposed (S3, ADR 0021): close this — its own "deprioritise gnomAD entirely is an equally valid outcome" clause is now the decision. No gnomAD, so nothing to rescope.
-- Purpose: #24's AC already scopes gnomAD enrichment as optional and ADR 0018 already bounded it to a chr21/chr22 slice, but `docs/SESSION_STATE.md` flags a real, unresolved gap underneath that: gnomAD's real footprint is ~7.7GB, not the "few hundred MB" ADR 0018 originally assumed, on a single-node laptop cluster with no headroom for that — noted there as "flagged during M5 planning, not yet tracked in a dedicated issue." A full download of even just the chr21/chr22 slice at that size is the wrong shape for this cluster regardless of whether gnomAD enrichment gets built at all.
-- Acceptance Criteria: if/when gnomAD enrichment (#24) is implemented, it queries gnomAD's own public HTTP-hosted, tabix-indexed VCFs directly via remote range requests scoped to exactly the chr21/chr22 coordinates a given lookup needs — never a full or partial local download. If a live remote dependency on the request path is judged not worth the added latency/reliability surface, deprioritizing gnomAD entirely is an equally valid outcome — record the decision either way rather than leaving it silently deferred.
-- Dependencies: #24.
-- Priority: P2. Labels: `backend`.
+**24a. ~~Rescope gnomAD enrichment to remote tabix range queries, not a full download~~ — CLOSED (ADR 0021/S3)**
+- This item's own "deprioritising gnomAD entirely is an equally valid outcome" clause is now the actual decision: no gnomAD, sole ClinVar source (#24). Nothing left to rescope.
 
 **25. ClinVar GRCh38 ingestion pipeline with release tracking**
 - Purpose: Close the project's previously-flagged provenance gap — ingest ClinVar's GRCh38 VCF on a recurring schedule and persist which release (version/date, parsed from the VCF's own header, not file mtime) backs each stored record.
@@ -336,27 +310,14 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Dependencies: none.
 - Priority: P1. Labels: `backend`, `enhancement`.
 
-**40. HGVS notation support for variant lookup**
-> Simplification proposed (S5, ADR 0021): CUT — clinical-genomics surface for a bio audience, no new SRE signal. Keep #38/#39 (real correctness), cut #40/#41 (depth-for-depth).
-- Purpose: ClinVar's own VCF already carries HGVS notation in the `CLNHGVS` INFO field, unused today; accepting `c.`/`g.` HGVS strings as a query input format (the notation clinicians and clinical data actually use, not just chrom/pos/ref/alt) closes a real usability gap between what the source data already contains and what the lookup endpoint accepts.
-- Acceptance Criteria: `CLNHGVS` parsed during ingestion (#25) and stored queryably; the lookup endpoint (#24) accepts an HGVS string (`c.` or `g.` form) as a fourth query key style alongside chrom/pos/ref/alt and rsID, using a maintained library (e.g. `biocommons/hgvs`) rather than hand-rolled parsing. Integration test covers an HGVS-form query against a known variant.
-- Dependencies: #24, #25.
-- Priority: P2. Labels: `backend`, `enhancement`.
+**40. ~~HGVS notation support for variant lookup~~ — CLOSED, simplification (ADR 0021/S5)**
+- Clinical-genomics-depth surface aimed at a clinical/bioinformatics audience, not a new SRE/platform signal. `#38` (the real rsID bug) and `#39` (indel normalization) are kept as genuine correctness work; HGVS is depth-for-depth's-sake beyond that.
 
-**41. GRCh37→GRCh38 liftover support**
-> Simplification proposed (S5, ADR 0021): CUT — same reasoning as #40 (bio depth, no new SRE signal).
-- Purpose: the service is GRCh38-only today with no build-awareness signal at all — a caller submitting GRCh37/hg19 coordinates (still common in clinical and legacy data) gets a silently wrong or not-found answer, not a clear rejection or an automatic correction, since nothing distinguishes the two builds at the API boundary.
-- Acceptance Criteria: incoming coordinate-form queries can be tagged (or auto-detected where feasible) as GRCh37 and lifted over to GRCh38 (e.g. `pyliftover` or CrossMap plus the standard NCBI/UCSC chain file) before matching against the GRCh38-indexed data; a query with no build tag keeps today's GRCh38-assumed behavior unchanged, so this is additive, not breaking. Test covers a known GRCh37-coordinate variant resolving correctly after liftover.
-- Dependencies: #24.
-- Priority: P2. Labels: `backend`, `enhancement`.
+**41. ~~GRCh37→GRCh38 liftover support~~ — CLOSED, simplification (ADR 0021/S5)**
+- Same reasoning as `#40`: bioinformatics depth for a bio audience, no new SRE/platform signal for this portfolio's stated goal.
 
-**30. Reserve M6 — real batch/alignment pipeline (placeholder, tracking only)**
-> Simplification proposed (S4, ADR 0021): CLOSE this — stop reserving M6. Object-storage + batch-Job + alignment is bioinformatics depth for a bio audience, not SRE/platform depth; the distinctive polyglot/provenance story is already delivered by `clinvar-service`, and extending the "bio coat of paint" is the exact failure mode #30 was meant to guard against. If accepted, this becomes struck-through like #27.
-- Purpose: Explicitly reserve the milestone that actually closes the project's remaining architectural gap (no object-storage/batch-Job data plane) — a real alignment pipeline on real FASTQ data, self-hosted MinIO, Kubernetes Jobs or a workflow engine — so it isn't left as vague "eventual" work. Raised directly by the Staff Bioinformatician's review of ADR 0018, against the specific failure mode of stopping at "portfolio project with a bio-flavored coat of paint."
-- Acceptance Criteria: Stays open and unscheduled until a dedicated future ADR defines its concrete scope; must not be closed as part of M5 work. Cross-referenced from ADR 0018 as the commitment mechanism for the reserved milestone.
-- Dependencies: none — intentionally unscoped placeholder.
-- Priority: P2. Labels: `architecture`.
-- Sequencing note (Staff Bioinformatician review): #38 (the rsID bug) and #39 (variant normalization) carry more bioinformatics novelty than this reserved milestone and are cheap relative to it — landing them before M6 begins is what makes M5 genuinely defensible as real domain work, not just "shipped and done."
+**30. ~~Reserve M6 — real batch/alignment pipeline (placeholder, tracking only)~~ — CLOSED, simplification (ADR 0021/S4)**
+- Object-storage + batch-Job + real-alignment-pipeline depth is bioinformatics depth for a bio audience, not SRE/platform depth — extending toward it is the exact "bio coat of paint" failure mode this placeholder was originally raised to guard against. The project's distinctive polyglot/data-provenance story is already delivered by `clinvar-service` (M5); M6 would be adding domain breadth, not SRE/platform depth. Not reserved. If a real batch/object-storage need ever surfaces from an SRE angle (not a bio one), it earns a fresh ADR then, not a resurrection of this one.
 
 ---
 
@@ -452,7 +413,7 @@ Guiding cut/keep calls (the reasoning; the actions are S1–S7 below):
 - Dependencies: S1 (so a real Ingress exists before whoami's is removed).
 - Priority: P2. Labels: `platform`.
 
-**S3. Drop gnomAD enrichment; make ClinVar the sole annotation source**
+**S3. Drop gnomAD enrichment; make ClinVar the sole annotation source — DONE**
 - Purpose: gnomAD was never built; its real footprint (~7.7GB, per
   `SESSION_STATE.md`, not the "few hundred MB" ADR 0018 assumed) does not
   fit this single-node cluster, and it adds a *second* data source that
@@ -470,7 +431,7 @@ Guiding cut/keep calls (the reasoning; the actions are S1–S7 below):
 - Dependencies: none. ADR 0021.
 - Priority: P2. Labels: `backend`, `architecture`.
 
-**S4. Close M6 (#30); stop reserving the FASTQ/alignment milestone**
+**S4. Close M6 (#30); stop reserving the FASTQ/alignment milestone — DONE**
 - Purpose: #30 reserves a real alignment pipeline on self-hosted MinIO +
   Kubernetes Jobs — a whole new object-storage/batch data plane built to
   serve bioinformatics depth for a bio audience, not SRE/platform depth.
@@ -487,7 +448,7 @@ Guiding cut/keep calls (the reasoning; the actions are S1–S7 below):
 - Dependencies: none. ADR 0021.
 - Priority: P2. Labels: `architecture`.
 
-**S5. Cut the M5 bioinformatics-depth enhancements #40 (HGVS) and #41 (liftover)**
+**S5. Cut the M5 bioinformatics-depth enhancements #40 (HGVS) and #41 (liftover) — DONE**
 - Purpose: HGVS-input support and GRCh37→GRCh38 liftover add
   clinical-genomics surface for a bio audience; they teach an SRE/platform
   reviewer nothing new once rsID + coordinate + normalized lookups already
@@ -501,7 +462,7 @@ Guiding cut/keep calls (the reasoning; the actions are S1–S7 below):
 - Dependencies: none.
 - Priority: P2. Labels: `backend`, `architecture`.
 
-**S6. Trim the chaos plan (#23) from seven scenarios to three**
+**S6. Trim the chaos plan (#23) from seven scenarios to three — DONE**
 - Purpose: #23's seven scenarios each demand a full signal → dashboard →
   alert → runbook → fault-proof → recovery-proof → article fact-pack. For a
   single operator, three well-chosen scenarios already prove the alerts and
@@ -518,7 +479,7 @@ Guiding cut/keep calls (the reasoning; the actions are S1–S7 below):
 - Dependencies: none.
 - Priority: P2. Labels: `observability`, `platform`.
 
-**S7. Cut the M4 résumé-padding items: close #21b, #33, #34; merge #23b into #23a**
+**S7. Cut the M4 résumé-padding items: close #21b, #33, #34; merge #23b into #23a — DONE**
 - Purpose: four M4 items add ceremony a single operator can't meaningfully
   exercise, on top of work that already covers the real ground.
   - **#21b (error-budget policy + multi-window burn-rate alerts)** is an
