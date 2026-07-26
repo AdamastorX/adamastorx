@@ -189,6 +189,24 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Dependencies: #21a.
 - Priority: P0. Labels: `observability`.
 
+**21b. Error-budget policy and multi-window burn-rate alerts**
+- Purpose: #21 defines each SLO's target; nothing yet defines what happens once the budget is spent, or fires an alert fast enough to matter before it's gone. A single instantaneous-rate-exceeds-threshold alert (the naive shape #21 stops short of) either fires too late (a slow multi-week burn never crosses a moment-in-time threshold) or too often (a short self-resolving spike trips it needlessly) — the exact failure mode the SRE workbook's multi-window burn-rate method exists to replace.
+- Acceptance Criteria: for each SLO in ADR 0020's table (`gateway`/`api`/`workers`/`clinvar-service`), a fast-burn (short window, high burn-rate multiple) and slow-burn (long window, lower multiple) alert pair, added to the same `serverFiles.alerting_rules.yml` ADR 0020 already established — no new alerting mechanism. A written error-budget policy (`observability/runbooks/` or `docs/`) states what "budget exhausted" means operationally for a single-operator project (a stated change freeze on the affected service until budget recovers, not aspirational), who lifts it, and where remaining budget is checked (a Grafana panel, not a mental estimate).
+- Dependencies: #21.
+- Priority: P1. Labels: `observability`.
+
+**21c. Wire Alertmanager to a real notification channel with severity routing**
+- Purpose: ADR 0020 enabled Alertmanager but shipped it with no external receiver, stated openly as deferred rather than assumed away — an alert today is only visible to someone already looking at Alertmanager's or Grafana's own UI, which defeats the point of alerting for a project with no one watching a dashboard continuously. ADR 0020 names a real destination as the only thing blocking this, not a design question.
+- Acceptance Criteria: Alertmanager's config gets one real receiver — a free destination (ntfy topic, Discord webhook, or Slack incoming webhook) reachable from the cluster — plus a severity-based routing tree (e.g. a `page`-equivalent severity routes to the real destination immediately, a `warning` severity batches/dedups) so noise doesn't drown a real page. At least one alert from #21's table is verified firing end-to-end into the chosen destination live, not just config-reviewed.
+- Dependencies: #21.
+- Priority: P1. Labels: `observability`.
+
+**21d. Node-disk / PVC-growth capacity alert**
+- Purpose: every PVC on this cluster (both Postgres instances, Loki, Tempo, `clinvar-service`'s refdata) uses the `local-path` StorageClass, confirmed to enforce no storage quota — a PVC's `resources.requests.storage` is advisory only, not an enforced ceiling, so unbounded growth on any one of them silently eats the single node's real disk with no warning. Nothing in #21's per-service SLO table watches this, since it's a node-level signal, not a per-service one.
+- Acceptance Criteria: a node/PVC disk-usage alert (whichever metric is already scraped — node filesystem or PVC-level) fires with real lead time before the node's disk actually fills, added to #21's `alerting_rules.yml`; routed through #21c's destination once that lands, but not blocked on it — visible in Alertmanager/Grafana meanwhile. Runbook per #22's convention.
+- Dependencies: #21.
+- Priority: P1. Labels: `observability`, `platform`.
+
 **22. Write incident response runbooks**
 - Purpose: Whoever's on call for an alert has a documented first response, not a blank page.
 - Acceptance Criteria: One runbook per alert defined in #21, living in `observability/runbooks/`, each covering what fired/what it means/first response/how to confirm resolution.
@@ -214,6 +232,42 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Dependencies: none — can start independently of #21a/#21/#22/#23.
 - Priority: P1. Labels: `platform`, `documentation`.
 
+**23b. Node-loss/DR game-day, proven restore, and an explicit accepted-risk statement**
+- Purpose: consolidates two independently-reached recommendations (a Staff SRE review and a Staff Platform Engineer review, run separately, converging on the same gap). #23a documents a backup approach and proves a restore once into a fresh instance, but doesn't yet rehearse the actual disaster it exists for: the loss of the one k3s node itself, since every PVC here (`local-path`) is node-pinned with no cross-node replication. Both reviews independently flagged that "single node/disk loss is unrecoverable on-node" needs to be a stated, accepted decision, not an implicit assumption nobody has actually rehearsed end to end.
+- Acceptance Criteria: a documented decision (an ADR, or an addition to #23a's runbook) stating explicitly that single node/disk loss is unrecoverable on-node, accepted as a reasonable risk for a personal single-node project, paired with #23a's proven `pg_dump`-based restore as the actual mitigation. A real game-day exercise: kill the node (or its PVC, whichever is safely simulable on this cluster) and rehearse restoring from #23a's backup into a fresh PVC/node, with real, measured RTO and RPO recorded from the exercise itself, not estimated in the abstract.
+- Dependencies: #23a.
+- Priority: P1. Labels: `platform`, `documentation`.
+
+**33. Blameless postmortems for the three real incidents already lived**
+- Purpose: three real production incidents have already happened and been fixed live — the SIGKILL-with-no-OOM-evidence double-ingestion incident (services#36, `dmesg`/`journalctl` all checked clean, see `docs/SESSION_STATE.md`), the Postgres Secret drift (platform#34), which recurred a second time immediately after platform#40's `ignoreDifferences` fix landed, and the ADR 0018→0019 namespace-bug architecture pivot (a PVC, then a Secret, neither shareable cross-namespace) — but none has a dedicated postmortem; each is only reconstructable today by reading ADRs and `SESSION_STATE.md`'s scattered notes end to end.
+- Acceptance Criteria: a new `/postmortems` directory (repo root or `docs/postmortems/`), one Markdown doc per incident covering timeline, impact, root cause, and action items already taken — cross-referencing services#36, platform#34/#40, and ADR 0018/0019 respectively rather than duplicating their content. Blameless in the literal sense: framed around process/signal gaps (no metric existed, a workaround masked a root cause), not individual fault.
+- Dependencies: none.
+- Priority: P2. Labels: `documentation`, `observability`.
+
+**34. Capacity baseline: real load test establishing measured p95 and ingestion-duration distribution**
+- Purpose: #21's latency SLOs and ADR 0020's ingestion-duration-anomaly alert both need a real number to compare against; today the only reference point is the informal "~90s baseline" in ADR 0020/`SESSION_STATE.md`'s incident notes and code comments — a single anecdotal observation, not a measured distribution. Setting a p95 threshold or an anomaly multiplier against that risks the exact mistake ADR 0020 already named: picking a threshold against the wrong number.
+- Acceptance Criteria: a repeatable load test (k6 or vegeta) against `gateway`/`api`/`workers` under representative traffic, plus repeated real ClinVar ingestion runs (or a controlled subset) capturing the actual ingestion-duration distribution. Results recorded in a doc or committed artifact and cross-referenced from #21/ADR 0020 as the source the thresholds actually trace back to, replacing "~90s" with a real measured number.
+- Dependencies: #21a.
+- Priority: P2. Labels: `observability`.
+
+**35. Namespace resource governance: `LimitRange` + `ResourceQuota` + a CI check**
+- Purpose: `api`/`workers` have memory limits set but no CPU limits anywhere in their manifests today, except `clinvar-service` (`platform/kubernetes/clinvar-service/deployment.yaml`, which sets both) — a runaway CPU-bound process in `api`/`workers`/`gateway` has no ceiling, and no namespace has a `ResourceQuota` capping total consumption either, on a single-node cluster where one namespace's runaway pod affects every other namespace's remaining capacity.
+- Acceptance Criteria: a `LimitRange` per namespace defaulting a CPU limit for any container that doesn't set one explicitly; a `ResourceQuota` per namespace bounding total CPU/memory request+limit; a CI check (`platform` repo) that fails a PR introducing a container manifest with no CPU/memory limit, rather than relying on manual review — the gap this item exists to close was only found by an external review, not caught earlier.
+- Dependencies: none.
+- Priority: P1. Labels: `platform`.
+
+**36. Remove Secret non-idempotency at the root: `existingSecret` migration**
+- Purpose: platform#34 (Postgres Secret regeneration, confirmed recurring twice — see `docs/SESSION_STATE.md`) was patched with `spec.ignoreDifferences` (platform#40) on each affected Bitnami chart's generated Secret (`postgresql`, `redis`, `clinvar-postgresql`, `kafka`) — a workaround that stops ArgoCD from fighting the drift in its diff view, not a fix for the drift's actual cause (`common.secrets.passwords.manage`'s reuse-idempotency depends on a live-cluster Helm `lookup()` that ArgoCD's `helm template` rendering never performs, per `SESSION_STATE.md`'s "suspected but unconfirmed cause"). The root cause is still live; only its visibility to ArgoCD was suppressed.
+- Acceptance Criteria: all four charts migrated from chart-generated passwords to a pre-created Kubernetes Secret referenced via each chart's `auth.existingSecret` (or equivalent) value, removing the chart's ability to generate or regenerate a password at all. Once migrated, the `ignoreDifferences` blocks platform#40 added are removed as no longer needed, not left in place redundantly. If this changes how Secrets are provisioned/rotated meaningfully, a small ADR recording the decision may be warranted — noted here for whoever picks this up, not written as part of this item.
+- Dependencies: none.
+- Priority: P1. Labels: `platform`, `security`.
+
+**37. Rollback runbook: prove a one-command deploy rollback**
+- Purpose: every deploy path (an image-tag bump merged, ArgoCD syncing it) is documented and exercised constantly; the reverse — rolling a bad deploy back — has never been proven end to end, and is exactly the action needed under real incident pressure, not the moment to be discovering the steps for the first time.
+- Acceptance Criteria: a runbook (`observability/runbooks/` or the `platform` repo) documenting the actual one-command rollback path (reverting the image-tag-bump commit and letting ArgoCD sync, or `argocd app rollback`) for at least one service; timed once for real against the live cluster, with the elapsed time recorded in the runbook as a real reference point, not an estimate.
+- Dependencies: none.
+- Priority: P1. Labels: `platform`, `documentation`.
+
 ---
 
 ## M5 Clinical Variant Annotation
@@ -223,6 +277,12 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Acceptance Criteria: Endpoint in `api` accepts chrom/pos/ref/alt OR rsID (mutually exclusive, not both). Response includes clinical significance and, when available, gnomAD allele frequency, plus the ClinVar release identifier behind the answer. Integration test covers both lookup key styles and a not-found case, against a known variant (e.g. rs80357906, BRCA1) with an asserted expected classification.
 - Dependencies: #25, #26, #28.
 - Priority: P0. Labels: `backend`.
+
+**24a. Rescope gnomAD enrichment to remote tabix range queries, not a full download**
+- Purpose: #24's AC already scopes gnomAD enrichment as optional and ADR 0018 already bounded it to a chr21/chr22 slice, but `docs/SESSION_STATE.md` flags a real, unresolved gap underneath that: gnomAD's real footprint is ~7.7GB, not the "few hundred MB" ADR 0018 originally assumed, on a single-node laptop cluster with no headroom for that — noted there as "flagged during M5 planning, not yet tracked in a dedicated issue." A full download of even just the chr21/chr22 slice at that size is the wrong shape for this cluster regardless of whether gnomAD enrichment gets built at all.
+- Acceptance Criteria: if/when gnomAD enrichment (#24) is implemented, it queries gnomAD's own public HTTP-hosted, tabix-indexed VCFs directly via remote range requests scoped to exactly the chr21/chr22 coordinates a given lookup needs — never a full or partial local download. If a live remote dependency on the request path is judged not worth the added latency/reliability surface, deprioritizing gnomAD entirely is an equally valid outcome — record the decision either way rather than leaving it silently deferred.
+- Dependencies: #24.
+- Priority: P2. Labels: `backend`.
 
 **25. ClinVar GRCh38 ingestion pipeline with release tracking**
 - Purpose: Close the project's previously-flagged provenance gap — ingest ClinVar's GRCh38 VCF on a recurring schedule and persist which release (version/date, parsed from the VCF's own header, not file mtime) backs each stored record.
@@ -251,11 +311,36 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Dependencies: #26, #21a.
 - Priority: P1. Labels: `observability`.
 
+**38. Fix `find_coordinates_by_rsid`: `LIMIT 1` silently drops alternate matches (real bug, not an enhancement)**
+- Purpose: a real correctness bug found by review, not a feature request — flagged and prioritized accordingly, distinct from the enhancement items around it. `services/clinvar-service/app/repository.py`'s `find_coordinates_by_rsid` queries `clinvar_variant_index WHERE rsid = %s LIMIT 1`; an rsID that maps to more than one allele or position (a real, non-edge-case occurrence in ClinVar's data) returns one arbitrary row instead of all matches, silently discarding the rest with no error, warning, or log line — a caller has no way to know a match was dropped.
+- Acceptance Criteria: `find_coordinates_by_rsid` (and its caller on the lookup path) returns every matching coordinate row for a given rsID, not just one; the API-facing response shape handles the multi-match case explicitly (e.g. a list, or a documented disambiguation rule) rather than picking silently. A regression test seeds a multi-mapped rsID and asserts every match is returned.
+- Dependencies: none.
+- Priority: P1. Labels: `bug`, `backend`.
+
+**39. Query-side variant normalization (left-align/trim indels)**
+- Purpose: flagged as the single highest-signal, cheap fix available in this domain — without normalization, a clinically-equivalent but differently-represented indel query (unaligned/untrimmed against ClinVar's own internally-normalized representation) produces a false-negative 404 rather than the correct match, a real correctness gap disguised as a missing-data result.
+- Acceptance Criteria: incoming `(chrom, pos, ref, alt)` queries are left-aligned and trimmed against the reference before being matched against the tabix/index lookup, so a differently-represented but equivalent indel resolves to the same record ClinVar itself normalized to. A test proves a deliberately unnormalized query for a known indel variant returns the same result as its normalized form.
+- Dependencies: none.
+- Priority: P1. Labels: `backend`, `enhancement`.
+
+**40. HGVS notation support for variant lookup**
+- Purpose: ClinVar's own VCF already carries HGVS notation in the `CLNHGVS` INFO field, unused today; accepting `c.`/`g.` HGVS strings as a query input format (the notation clinicians and clinical data actually use, not just chrom/pos/ref/alt) closes a real usability gap between what the source data already contains and what the lookup endpoint accepts.
+- Acceptance Criteria: `CLNHGVS` parsed during ingestion (#25) and stored queryably; the lookup endpoint (#24) accepts an HGVS string (`c.` or `g.` form) as a fourth query key style alongside chrom/pos/ref/alt and rsID, using a maintained library (e.g. `biocommons/hgvs`) rather than hand-rolled parsing. Integration test covers an HGVS-form query against a known variant.
+- Dependencies: #24, #25.
+- Priority: P2. Labels: `backend`, `enhancement`.
+
+**41. GRCh37→GRCh38 liftover support**
+- Purpose: the service is GRCh38-only today with no build-awareness signal at all — a caller submitting GRCh37/hg19 coordinates (still common in clinical and legacy data) gets a silently wrong or not-found answer, not a clear rejection or an automatic correction, since nothing distinguishes the two builds at the API boundary.
+- Acceptance Criteria: incoming coordinate-form queries can be tagged (or auto-detected where feasible) as GRCh37 and lifted over to GRCh38 (e.g. `pyliftover` or CrossMap plus the standard NCBI/UCSC chain file) before matching against the GRCh38-indexed data; a query with no build tag keeps today's GRCh38-assumed behavior unchanged, so this is additive, not breaking. Test covers a known GRCh37-coordinate variant resolving correctly after liftover.
+- Dependencies: #24.
+- Priority: P2. Labels: `backend`, `enhancement`.
+
 **30. Reserve M6 — real batch/alignment pipeline (placeholder, tracking only)**
 - Purpose: Explicitly reserve the milestone that actually closes the project's remaining architectural gap (no object-storage/batch-Job data plane) — a real alignment pipeline on real FASTQ data, self-hosted MinIO, Kubernetes Jobs or a workflow engine — so it isn't left as vague "eventual" work. Raised directly by the Staff Bioinformatician's review of ADR 0018, against the specific failure mode of stopping at "portfolio project with a bio-flavored coat of paint."
 - Acceptance Criteria: Stays open and unscheduled until a dedicated future ADR defines its concrete scope; must not be closed as part of M5 work. Cross-referenced from ADR 0018 as the commitment mechanism for the reserved milestone.
 - Dependencies: none — intentionally unscoped placeholder.
 - Priority: P2. Labels: `architecture`.
+- Sequencing note (Staff Bioinformatician review): #38 (the rsID bug) and #39 (variant normalization) carry more bioinformatics novelty than this reserved milestone and are cheap relative to it — landing them before M6 begins is what makes M5 genuinely defensible as real domain work, not just "shipped and done."
 
 ---
 
