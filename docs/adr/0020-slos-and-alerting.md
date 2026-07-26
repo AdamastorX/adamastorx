@@ -98,6 +98,40 @@ are live — not picked in the abstract in this ADR.
   here should block on picking one. Revisit when there's an actual
   destination (a Slack workspace, a personal on-call phone) worth
   wiring up.
+  - **Correction, found implementing #21/#21c for real**: that
+    "revisit" trigger came due almost immediately — an Alertmanager
+    with no receiver notifies no one, which is a real, avoidable gap
+    for a single-operator project, not a hypothetical one. `ntfy.sh`
+    was picked over Slack/Discord/Telegram/PagerDuty specifically
+    because it needs zero account/credential setup (a random,
+    never-registered topic name is the entire "auth" model) — every
+    alternative above requires creating an account or an app/bot
+    first. Alertmanager has no native `ntfy` receiver type; wired via
+    a plain `webhook_configs` entry pointed at
+    `https://ntfy.sh/<topic>`. Verified live before committing to this
+    shape (not assumed from ntfy's docs): POSTing an
+    Alertmanager-shaped JSON blob to a topic-suffixed ntfy URL returns
+    `200` and delivers a real push notification whose body is that raw
+    JSON — readable, not prettified; a templating relay in front of
+    ntfy for nicer formatting is real, useful follow-on work, not
+    needed for the "does a real notification arrive" bar #21c sets. A
+    minimal severity-routing tree exists (a `critical` route with
+    tighter `group_wait`/`repeat_interval`) but shares the same single
+    receiver for v1, per backlog #21c's own "don't over-engineer
+    routing #21b's burn-rate work will refine later" scope.
+  - **Second correction, found writing #21's actual alert rules**:
+    two of the SLO table's clinvar-service rows needed a metric
+    dimension #21a's shipped metrics don't have.
+    `clinvar_lookup_duration_seconds` (latency only, no status label)
+    can't support a non-5xx-rate alert — shipped without one rather
+    than alerting against a signal that isn't there, tracked as
+    backlog #21e. `clinvar_ingestion_duration_seconds_count`
+    increments on both success and failure (its `.time()` wrapper
+    sits around `_do_ingest` regardless of outcome), so the freshness
+    alert that did ship (`ClinVarIngestionFreshnessBreach`) can only
+    detect "no attempt in 8 days", not this section's own "time since
+    last *successful* ingestion" — also tracked as #21e, not silently
+    passed off as the real thing.
 
 ### Runbooks (backlog #22)
 

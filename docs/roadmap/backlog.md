@@ -207,6 +207,12 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Dependencies: #21.
 - Priority: P1. Labels: `observability`, `platform`.
 
+**21e. Status-labeled request/success counters for clinvar-service's lookup and ingestion paths**
+- Purpose: #21 implements ADR 0020's SLO table against clinvar-service's real metrics (#21a) everywhere those metrics actually support it — but two of that table's rows turned out to need a metric dimension #21a didn't add, found while writing #21's alert rules against a live Prometheus, not assumed from the ADR text. `GET /internal/clinvar/lookup`'s non-5xx rate SLI needs a status/outcome label on a request counter; the shipped `clinvar_lookup_duration_seconds` histogram (`app/metrics.py`) records latency only, with no status split, so there is no real signal to alert a non-5xx rate against yet — #21 ships without that specific alert rather than faking one against data that doesn't exist. Separately, the ingestion-freshness SLI's "time since last *successful* ingestion" (ADR 0020's own wording) needs a success-labeled counter distinct from `clinvar_ingestion_duration_seconds_count`, since that histogram's `.time()` wrapper (`app/ingestion.py`) increments on both the success and failure paths alike — #21's `ClinVarIngestionFreshnessBreach` alert ships anyway, with this exact limitation stated in its own rule comment: it can only detect "no ingestion attempt at all in 8 days", not "attempts happened but every one failed".
+- Acceptance Criteria: `clinvar-service` gets a status-labeled lookup-outcome counter (e.g. `clinvar_lookup_requests_total{status=...}`) and a success-only ingestion signal (a counter or a last-success-timestamp gauge, not reusing the duration histogram for this). Both confirmed as real series on a live `/metrics` scrape before `#21`'s deferred `ClinVarLookupHighErrorRate` alert is written and before `ClinVarIngestionFreshnessBreach`'s expression is corrected to key off successful runs specifically.
+- Dependencies: none — can start independently of #21b/#21c/#21d.
+- Priority: P1. Labels: `backend`, `observability`.
+
 **22. Write incident response runbooks**
 - Purpose: Whoever's on call for an alert has a documented first response, not a blank page.
 - Acceptance Criteria: One runbook per alert defined in #21, living in `observability/runbooks/`, each covering what fired/what it means/first response/how to confirm resolution.
