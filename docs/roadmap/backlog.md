@@ -216,10 +216,10 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Dependencies: #21.
 - Priority: P0. Labels: `documentation`, `observability`.
 
-**23. Chaos / failure-injection test plan**
+**23. Chaos / failure-injection test plan — 1/3 done**
 - Purpose: Confidence that the alerts and runbooks actually work, proven before a real incident does it for us — and a source of real evidence (logs, metrics, screenshots) for writeups, not a narrative constructed after the fact.
 - Acceptance Criteria (trimmed to three scenarios, ADR 0021/S6 — the original seven's scenarios 4-7 re-exercised the same "does an alert fire and route correctly" muscle without a genuinely new SRE signal): each of the three below produces a signal, a dashboard, an alert, a runbook, proof of the fault injection, proof of recovery, and a fact pack (commands run, timestamps, screenshots) usable for an article:
-  1. Kafka broker unavailable (produce/consume path).
+  1. **Kafka broker unavailable (produce/consume path) — DONE, live, `observability/chaos/01-kafka-broker-unavailable.md`.** Ran real, unscripted: ArgoCD's selfHeal auto-reverted the fault in ~2 minutes (unprompted), which meant no existing alert actually fired (none are tuned for a brief outage under this project's low manual-test traffic) — a real, honestly-reported gap, not papered over, tracked as new #42. Also found `WorkItemProducer`'s Kafka publish isn't actually non-blocking under a metadata-unavailable topic (a real ~60s synchronous block, not the silently-swallowed failure previously assumed) — tracked as new #43. Recovery proven: topics recreated, a real produce→consume cycle completed in 1s.
   2. PostgreSQL unavailable, and separately, PVC full.
   3. Consumer group lag (workers falling behind `work-items`).
 - Dependencies: #22.
@@ -512,3 +512,15 @@ Guiding cut/keep calls (the reasoning; the actions are S1–S7 below):
   solo repo where review already catches it.
 - Dependencies: none.
 - Priority: P2. Labels: `observability`, `platform`, `documentation`.
+
+**42. Real Kafka broker/topic availability alert**
+- Purpose: chaos scenario 1 (`observability/chaos/01-kafka-broker-unavailable.md`, backlog #23) ran a real Kafka outage live and found none of the 6 existing alert rules fired — `ApiHighErrorRate` needs a sustained 5-minute window of non-zero real traffic at >5% error rate, and a brief outage under this project's actual low/manual-test traffic pattern never sustains that. There is currently no alert that detects "Kafka itself is unavailable or missing a topic" directly, only ones that infer it from downstream error rates that need real traffic to trip.
+- Acceptance Criteria: a Prometheus alert on Kafka's own availability (e.g. `up{job=~"kafka.*"}` if scraped, or a broker/topic health check) fires within a reasonable window of a real outage, independent of whether `api`/`workers` are receiving traffic at the time. Verified live against a repeated version of chaos scenario 1.
+- Dependencies: #21.
+- Priority: P1. Labels: `observability`.
+
+**43. Re-examine `WorkItemProducer`'s synchronous-block-then-500 behavior under a Kafka outage**
+- Purpose: chaos scenario 1 found a real, previously-undocumented (and more severe than assumed) failure mode: `WorkItemProducer.publish()` calls `kafkaTemplate.send()` and returns `void` with no blocking call in application code, but the underlying `KafkaProducer.send()` itself can block synchronously waiting for topic metadata (Kafka client's own `max.block.ms`, default 60s) before the fire-and-forget future is even returned — so a real caller gets a slow, synchronous 500 during a Kafka outage, not the silently-swallowed async failure ADR 0012's "known gap" description assumed.
+- Acceptance Criteria: a documented decision (ADR addendum or backlog note) on whether this is an acceptable tradeoff for this project's scale, or whether a shorter `max.block.ms`/an explicit async error-handling path is worth adding so a Kafka outage degrades to a fast, clear error instead of a ~60s hang. Not required to change the behavior — required to make the decision explicit rather than leaving the corrected understanding undocumented.
+- Dependencies: none.
+- Priority: P2. Labels: `backend`, `observability`.
