@@ -177,27 +177,34 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 
 ### Epic: SRE Practices
 
+**21a. Real histogram/lag/clinvar metrics — prerequisite for #21, not a repeat of ADR 0017's deferred gap**
+- Purpose: ADR 0017 shipped golden-signal dashboards with two named, deliberately-deferred gaps (no true latency percentiles — average/max only, no `_bucket` series; `workers`' saturation panel uses thread-pool usage as a stated proxy, no real Kafka consumer-lag metric) and `clinvar-service` (ADR 0019) has zero Prometheus metrics at all. Writing SLOs (#21) against a stand-in instead of the real signal would pick thresholds against the wrong number. ADR 0020 makes this the deferred follow-up, due now.
+- Acceptance Criteria: `management.metrics.distribution.percentiles-histogram.http.server.requests` (and the `spring.kafka.listener` timer equivalent) enabled on `gateway`/`api`/`workers`, giving a real `histogram_quantile(0.95, ...)`. `workers` gets a real consumer-lag metric via explicit `KafkaClientMetrics(consumer).bindTo(meterRegistry)` registered against its hand-built `ConsumerFactory` (Boot's auto-configured Kafka metrics binder doesn't apply here, same reason `spring.kafka.listener.observation-enabled` was already a no-op, ADR 0011). `clinvar-service` gets a `/metrics` endpoint (`prometheus_client`) exposing an ingestion-duration histogram, an `in_progress` gauge, a counter on the 409 concurrent-rejection path (services#36), and a lookup-latency/count histogram. ADR 0017's three dashboards updated in the same wave to plot the real values instead of the stated average/max/thread-pool stand-ins.
+- Dependencies: #20.
+- Priority: P0. Labels: `backend`, `observability`.
+
 **21. Define SLOs and alerting rules**
 - Purpose: "Healthy" is defined numerically, and alerts fire on the definition, not on vibes.
-- Acceptance Criteria: At least one SLO per service with an error budget; alert rules wired to the SLO, no dashboard-only "alerts".
-- Dependencies: #20.
+- Acceptance Criteria: One SLO per service (ADR 0020's table): `gateway`/`api` non-5xx rate + p95 latency (`api` additionally on `GET /variants/lookup` specifically, its own external-dependency failure mode); `workers` listener-error rate + consumer-lag threshold (not latency — a queue consumer's saturation signal is backlog depth); `clinvar-service` lookup non-5xx rate + p95, plus an ingestion-freshness SLO (time since last successful ingestion exceeding the scheduled cadence) and an ingestion-duration-anomaly alert (a run taking several multiples of the ~90s real-data baseline — the exact signal that would have made the double-ingestion incident visible as a metric instead of a `kubectl logs --previous` read after the fact). Alertmanager enabled (`argocd/apps/prometheus.yaml`), alert rules via Prometheus's own `serverFiles.alerting_rules.yml` (no Operator/CRD, ADR 0014's precedent). No external notification channel (Slack/email/PagerDuty) wired up yet — stated openly as deferred, not silently incomplete; alerts visible in Alertmanager's/Grafana's own alerting views for now.
+- Dependencies: #21a.
 - Priority: P0. Labels: `observability`.
 
 **22. Write incident response runbooks**
 - Purpose: Whoever's on call for an alert has a documented first response, not a blank page.
-- Acceptance Criteria: One runbook per alert defined in #21, living in `observability/runbooks/`.
+- Acceptance Criteria: One runbook per alert defined in #21, living in `observability/runbooks/`, each covering what fired/what it means/first response/how to confirm resolution.
 - Dependencies: #21.
 - Priority: P0. Labels: `documentation`, `observability`.
 
 **23. Chaos / failure-injection test plan**
 - Purpose: Confidence that the alerts and runbooks actually work, proven before a real incident does it for us — and a source of real evidence (logs, metrics, screenshots) for writeups, not a narrative constructed after the fact.
-- Acceptance Criteria: Six concrete scenarios, each producing: a signal, a dashboard, an alert, a runbook, proof of the fault injection, proof of recovery, and a fact pack (commands run, timestamps, screenshots) usable for an article:
+- Acceptance Criteria: Seven concrete scenarios, each producing: a signal, a dashboard, an alert, a runbook, proof of the fault injection, proof of recovery, and a fact pack (commands run, timestamps, screenshots) usable for an article:
   1. Kafka broker unavailable (produce/consume path).
   2. PostgreSQL unavailable, and separately, PVC full.
   3. Consumer group lag (workers falling behind `work-items`).
   4. Poison message / dead-letter topic triggered.
   5. Readiness probe failing (traffic correctly stops routing).
   6. ArgoCD drift (manual cluster change reverted by selfHeal, or blocked/flagged if prune is off).
+  7. `clinvar-service`'s dedicated Postgres/PVC unavailable during a live `/variants/lookup` call (ADR 0020) — proves the failure degrades that path only (`work-items` unaffected) and that the node-pinned `local-path` PVC's known consequence (can't reschedule onto another node) is observed directly, not assumed.
 - Dependencies: #22.
 - Priority: P1. Labels: `observability`, `platform`.
 
@@ -223,22 +230,19 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Dependencies: #25, #15.
 - Priority: P0. Labels: `backend`.
 
-**27. ClinVar/gnomAD storage footprint and refresh scheduling**
-- Purpose: Provision where the ingested ClinVar (weekly) and gnomAD chr21/chr22 slice (infrequent) data lives, sized and scheduled — the first non-trivial-volume dataset and the first time `workers` becomes stateful.
-- Acceptance Criteria: Shared RWX PVC mounted on both `api` and `workers`, sized from measured artifact size with headroom for a download-then-swap so a partially-written release is never served; `workers` pinned to a single replica (documented consequence of a node-pinned `local-path` PVC). Data survives a pod restart with no re-download (verified via checksum/mtime before and after `kubectl delete pod`). A `dev` values overlay points ingestion at a small CI fixture instead of NCBI for scratch-cluster bring-up.
-- Dependencies: none.
-- Priority: P0. Labels: `platform`.
+**27. ~~ClinVar/gnomAD storage footprint and refresh scheduling~~ — CLOSED, superseded by ADR 0019**
+- Written against ADR 0018's original design (shared RWX PVC across `api`/`workers`). ADR 0019 replaced this after two real cross-namespace bugs (a PVC, then a Postgres Secret, neither shareable across the `api`/`workers` boundary): `clinvar-service` got its own dedicated namespace, PVC, and Postgres instead of a shared one, and `workers` was reverted to stateless. The actual provisioning this item wanted already shipped, in a different shape, via platform#36/#38. Closed as superseded (ADR 0020); no replacement item needed.
 
 **28. Release-ID propagation through OTel trace correlation**
 - Purpose: Extend the existing trace-correlation path (ADR 0013/0015) so the ClinVar release behind any given answer is visible end-to-end, not just stored at the data layer.
-- Acceptance Criteria: Release ID stamped once into a single shared field at response-assembly time, surfaced as a `clinvar.release_id` span attribute (confirmed search-enabled in Tempo, not assumed) and a bounded-cardinality metric tag derived from the same field — not computed independently in two places. Visible in Loki as structured metadata, same pattern as `trace_id`/`span_id`. Verified live: a real request's trace ID shows the release attribute in Tempo, pivots to the matching Loki log line, and the Prometheus counter carries the same value.
+- Acceptance Criteria (rescoped for ADR 0019, ADR 0020): the release ID now crosses a live HTTP boundary into `clinvar-service`, a separate Python/FastAPI process with its own OTel SDK — this project's first Java↔Python trace stitch. Verify live, not assumed, that FastAPI's OTel instrumentation actually propagates the inbound W3C `traceparent` end to end. Release ID surfaced as a `clinvar.release_id` span attribute (confirmed search-enabled in Tempo) and a bounded-cardinality metric tag derived from the same field, carried in the HTTP response body from `clinvar-service` rather than read from a local DB by `api`. Visible in Loki as structured metadata, same pattern as `trace_id`/`span_id`. Verified live: a real request's trace ID shows the release attribute in Tempo, pivots to the matching Loki log line, and the Prometheus counter carries the same value.
 - Dependencies: #24, #25.
 - Priority: P1. Labels: `backend`, `observability`.
 
 **29. Grafana dashboard + alert: variant-lookup access pattern and invalidation correctness**
 - Purpose: Give visibility into the project's first genuinely skewed cache access pattern and its invalidation-on-write behavior (#26), neither of which the existing golden-signal/TTL-only dashboards capture — and alert on the one failure mode here that's a correctness issue, not just a performance one.
-- Acceptance Criteria: Dashboard contrasts `workItemCache` vs `variantAnnotationCache` hit/miss/error rate, a bounded top-N-hot-keys-vs-long-tail panel (not a raw per-variant label), invalidation-event rate by reason, and cache-entry-age distribution. One alert ships with this item, not deferred to #21: `ClinVarInvalidationLag`, firing on invalidation-job failure or a served entry older than the latest completed release by more than a 15-minute sweep window, with a linked runbook. Every other new panel stays explicitly labeled in-panel as a stepping-stone toward #21, matching the precedent #20 already set. Verified with real synthetic traffic shaped like each domain, and a staged invalidation failure confirmed to fire the alert inside the window.
-- Dependencies: #26, #27.
+- Acceptance Criteria (rescoped for ADR 0019, ADR 0020): dashboard now needs two separate signal sources, not one — `clinvar-service`'s own golden signals (#21a's new metrics: lookup latency/count, ingestion duration/freshness) alongside `api`'s existing `workItemCache`/`variantAnnotationCache` Redis hit/miss/error view. A bounded top-N-hot-keys-vs-long-tail panel (not a raw per-variant label), invalidation-event rate by reason, and cache-entry-age distribution. `ClinVarInvalidationLag` alert's failure surface is now "did `clinvar-service`'s Kafka publish happen, did `api`'s consumer drain it" — `clinvar-service` owns the diff/publish step end-to-end (ADR 0019), `api` no longer recomputes anything. Every other new panel stays explicitly labeled in-panel as a stepping-stone toward #21, matching the precedent #20 already set. Verified with real synthetic traffic shaped like each domain, and a staged invalidation failure confirmed to fire the alert inside the window.
+- Dependencies: #26, #21a.
 - Priority: P1. Labels: `observability`.
 
 **30. Reserve M6 — real batch/alignment pipeline (placeholder, tracking only)**
