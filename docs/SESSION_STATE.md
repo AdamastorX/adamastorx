@@ -10,6 +10,37 @@ Last updated: 2026-07-26.
 
 ## Where things stand
 
+**Backlog #21 (SLOs + alerting) and #21c (Alertmanager receiver) implemented,
+PR open, not yet merged.** `argocd/apps/prometheus.yaml`:
+`alertmanager.enabled` flipped to `true`, seven alert rules added under
+`server.serverFiles.alerting_rules.yml` (one per ADR 0020 SLO-table row,
+except clinvar-service's lookup non-5xx — see gap below), Alertmanager's
+own `config` wired to a single real receiver: a `webhook_configs` entry
+pointed at a randomly-generated-once `ntfy.sh` topic (zero account/
+credential needed, verified live with a real `curl` POST before choosing
+it), plus a minimal severity-routing tree (`critical` gets a faster
+`group_wait`/`repeat_interval`, everything else shares the same receiver
+on a slower cadence — #21b's future burn-rate work gets a place to attach
+a second receiver later, not built now). Also fixed in the same PR:
+`clinvar-service` was never actually added to Prometheus's
+`extraScrapeConfigs` when #21a shipped its `/metrics` endpoint — confirmed
+missing on the live `/api/v1/targets` output before writing any
+clinvar-service alert rule, since an unscraped metric's rule would just
+silently never fire rather than error. **Stated gap, tracked as new
+backlog #21e**: `clinvar_lookup_duration_seconds` has no status/outcome
+label, so `GET /internal/clinvar/lookup`'s non-5xx-rate SLO has no alert
+yet (shipped without one rather than faking it against data that isn't
+there); `clinvar_ingestion_duration_seconds_count` increments on both
+success and failure, so the `ClinVarIngestionFreshnessBreach` alert that
+did ship can only detect "no attempt in 8 days", not "attempts happened
+but every one failed" (ADR 0020's own wording is "last *successful*
+ingestion"). All 7 PromQL expressions verified syntactically valid and
+evaluable against the live cluster's real Prometheus
+(`kubectl -n prometheus port-forward svc/prometheus-server`) before
+opening the PR. See the PR description for exactly what was/wasn't
+verified live end to end (rules loaded into `/api/v1/rules`, a real
+alert firing into the ntfy topic) vs. left for post-merge.
+
 **M4 kicked off (ADR 0020): backlog #21a (real histogram/consumer-lag/
 clinvar-service metrics) is done and verified live.** A five-persona
 survey (architect, backend-engineer, platform-engineer,

@@ -60,8 +60,12 @@ done — `clinvar-service` (Python/FastAPI, ADR 0019, superseding ADR 0018's
 original in-Java design after two real cross-namespace bugs) verified live
 end to end (`rs80357906` → BRCA1, `"Pathogenic"`). M4 Reliability
 (ADR 0020) is now the active milestone: real histogram/consumer-lag/
-`clinvar-service` metrics (backlog #21a) are the current prerequisite,
-ahead of SLOs/alerting (#21), runbooks (#22), and chaos scenarios (#23).
+`clinvar-service` metrics (backlog #21a) shipped, and SLOs/alerting
+(#21) plus Alertmanager's ntfy.sh receiver (#21c) followed — one alert
+rule per SLO in ADR 0020's table (two clinvar-service rows deferred,
+stated gap, tracked as #21e), Alertmanager routing critical severity
+faster than the rest. Runbooks (#22), error-budget/burn-rate alerts
+(#21b), and chaos scenarios (#23) remain ahead.
 See `docs/roadmap/milestones.md` and `docs/SESSION_STATE.md` for exactly
 what's in flight right now — this section is a point-in-time summary, that
 file is the current source of truth.
