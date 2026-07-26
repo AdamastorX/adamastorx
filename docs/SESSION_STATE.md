@@ -10,6 +10,78 @@ Last updated: 2026-07-26.
 
 ## Where things stand
 
+**M4 kicked off (ADR 0020): backlog #21a (real histogram/consumer-lag/
+clinvar-service metrics) is done and verified live.** A five-persona
+survey (architect, backend-engineer, platform-engineer,
+observability-engineer, documentation-engineer) converged
+independently on "M4 is the most overdue milestone." ADR 0020 made
+ADR 0017's own named gaps (no true latency percentiles, no real Kafka
+consumer-lag metric) the explicit prerequisite for #21's SLOs, plus
+gave `clinvar-service` its first Prometheus metrics from zero. All
+three now confirmed live with real traffic: a real `POST /work-items`
+produced genuine `http_server_requests_seconds_bucket` series, a real
+produce/consume cycle produced a genuine
+`kafka_consumer_fetch_manager_records_lag` gauge on `workers` (the
+hand-built `ConsumerFactory` needed an explicit
+`KafkaClientMetrics(...).bindTo(meterRegistry)` call — Boot's
+auto-configured Kafka metrics binder never applies here, same root
+cause as the `observation-enabled` no-op below), and `clinvar-service`'s
+new `GET /metrics` returned real `clinvar_ingestion_duration_seconds`/
+`clinvar_ingestion_in_progress`/`clinvar_ingestion_rejected_total`/
+`clinvar_lookup_duration_seconds` series. Dashboards (ADR 0017) updated
+to plot the real values instead of the average/max/thread-pool
+stand-ins. Backlog #27 closed as superseded (ADR 0019); #28/#29
+rescoped for `clinvar-service`'s real Python architecture. Next: #21
+(SLOs), #22 (runbooks), #23 (7 chaos scenarios now, `clinvar-service`'s
+own Postgres/PVC added as #7).
+
+**platform#34 (Postgres Secret regeneration) root-caused, fixed, and
+then immediately demonstrated its own pre-fix damage.** Confirmed by
+rendering each affected Bitnami chart (`postgresql`, `redis`,
+`clinvar-postgresql`, `kafka`) twice offline with identical inputs —
+the auto-generated Secret's password/cluster-id differs on every
+render, since `common.secrets.passwords.manage`'s reuse-idempotency
+needs a live-cluster Helm `lookup()` that ArgoCD's `helm template`
+rendering never has. Fixed going forward with `spec.ignoreDifferences`
+on each Secret's `/data` (platform#40) — but this only stops *future*
+drift; deploying the M4 metrics work bounced `api`'s pod, and the fresh
+pod's first-ever connection attempt hit `FATAL: password authentication
+failed for user "api"` — the Secret had *already* silently diverged
+from Postgres's real password at some earlier point, before the fix
+landed, and nothing had forced a fresh connection since. Confirmed via
+`kubectl exec postgresql-0 -- env | grep PASSWORD` vs. the Secret's own
+value (different), fixed live with explicit confirmation (`ALTER USER
+api WITH PASSWORD '<Secret's value>'`) — same playbook as the original
+incident, see the gotcha below. **Lesson**: `ignoreDifferences` prevents
+new drift, it does not retroactively repair a Secret that already
+drifted — if this recurs on Redis/Kafka/clinvar-postgresql, check for
+a *pre-existing* mismatch the same way before assuming the fix already
+covers it.
+
+**Same rollout, separately: all 3 Kafka topics vanished** (`work-items`,
+`work-items.DLT`, `clinvar.ingestion.completed`) — confirmed a
+coincidental broker restart (`kafka-controller-0` at 85m age, so within
+this session), matching ADR 0011's known ephemeral-storage behavior
+(`auto.create.topics.enable: false`). Recreated manually (3 partitions
+for `work-items`/`.DLT`, 1 for `clinvar.ingestion.completed`), then
+restarted `api`/`workers`/`clinvar-service` for clean consumer-group
+state. No data lost (in-flight messages only), but worth remembering
+this can wipe topics silently again on any future Kafka pod restart.
+
+**Independent staff-engineer audit** (a genuinely cross-cutting review,
+not one of the 5 narrow repo personas) found: `.claude/PROJECT.md`'s
+"Current milestone" section had drifted badly stale (still said "M2 in
+progress, services#5 remaining" after M3 and M5 had both shipped) —
+fixed directly, and backlog #32 added to make that drift checkable
+going forward instead of silently possible. Also found a genuinely
+uncovered gap: **no backup/restore path exists for any stateful data**
+(`api`'s Postgres, `clinvar-service`'s own Postgres, Loki, Tempo — all
+a single node-pinned PVC each, no `pg_dump`/snapshot/off-node copy
+anywhere) — added as backlog #23a. And #31, a proposed top-level "what
+this project demonstrates" narrative doc, since the real throughline
+(incidents found and fixed live, the ADR 0018→0019 pivot) is currently
+only reconstructable by reading ~20 ADRs end to end.
+
 **M5 Clinical Variant Annotation is live and verified end to end.**
 `clinvar-service` (Python/FastAPI, ADR 0019, own `clinvar` namespace,
 own dedicated Postgres) replaced ADR 0018's original design after two
@@ -285,28 +357,35 @@ new namespace by default.
 
 ## Where to look next
 
-- `platform`#34 (Postgres Secret regeneration, P1) — real, unresolved,
-  can silently break any stateful component's next pod restart. Worth
-  picking up before it happens again on Kafka, Redis, or
-  `clinvar-postgresql`'s own credentials.
-- M4: #21 (SLOs/alerting, depends on #20's now-live dashboards) and
-  #19a (Prometheus exemplars, metric→trace pivot) are the next real
-  gaps — neither started.
+- `platform`#34 (Postgres Secret regeneration) is **fixed** (PR #40,
+  `ignoreDifferences` on 4 charts' Secrets) — but re-check any
+  stateful component's Secret against its pod's actual env on the next
+  incident, since the fix only stops new drift, not an
+  already-diverged credential (see above, `api` hit exactly this right
+  after the fix landed).
+- M4: #21 (SLOs/alerting) is next, now unblocked — #21a's real
+  histogram/lag/clinvar metrics are live. #22 (runbooks) and #23 (7
+  chaos scenarios) follow. #19a (Prometheus exemplars) still not
+  started, lower priority than #21.
 - observability#13/#14 (release-ID trace propagation, `clinvar-service`
-  dashboard + `ClinVarInvalidationLag` alert, ADR 0018) — need
-  re-scoping against ADR 0019's actual Python architecture before
-  implementation; not started.
+  dashboard + `ClinVarInvalidationLag` alert) — rescoped for ADR 0019
+  (see backlog #28/#29), not started.
+- backlog #23a (backup/restore for stateful data — no Postgres/Loki/
+  Tempo backup exists anywhere), #31 (top-level project narrative
+  doc), #32 (keep `.claude/PROJECT.md` from drifting stale again) — all
+  new from the staff-engineer audit, none started.
 - gnomAD's real size (~7.7GB, not the "a few hundred MB" ADR 0018
-  originally assumed) — flagged by the platform-engineer agent during
-  M5 planning, not yet tracked in a dedicated issue or resolved.
+  originally assumed) — flagged during M5 planning, not yet tracked in
+  a dedicated issue or resolved.
 - The manual ingestion trigger (`POST /internal/clinvar/ingest`) is
   still fully synchronous for several minutes; services#36 stops a
   second overlapping call from running concurrently, but the endpoint
   itself blocking the request for the whole ingestion is still a
   fragile shape (client/proxy timeouts) worth revisiting as a
   fire-and-poll design if this becomes a recurring pain point.
-- observability#7 (chaos/incident-lab scenarios) — expanded with 6
-  concrete scenarios earlier this session but not implemented.
+- observability#7 (chaos/incident-lab scenarios) — 7 concrete scenarios
+  defined (ADR 0020 added a 7th for `clinvar-service`), none
+  implemented yet.
 
 ## Working via background agents (new pattern, this session)
 
