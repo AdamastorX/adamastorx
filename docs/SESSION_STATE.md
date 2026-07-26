@@ -6,9 +6,40 @@ threads, and things the next session shouldn't have to re-discover the
 hard way. Prune/rewrite freely as work completes; this file describes
 *current* state, not history (git history is the record of the past).
 
-Last updated: 2026-07-25.
+Last updated: 2026-07-26.
 
 ## Where things stand
+
+**M5 Clinical Variant Annotation is live and verified end to end.**
+`clinvar-service` (Python/FastAPI, ADR 0019, own `clinvar` namespace,
+own dedicated Postgres) replaced ADR 0018's original design after two
+real cross-namespace bugs (a PVC, then a Postgres Secret — neither
+shareable across `api`/`workers`) surfaced deploying it. `api` calls it
+over HTTP and fronts the result with the existing Redis cache-aside
+layer, invalidated on write via a Kafka event carrying the specific
+changed cache keys. Verified live: a real ingestion (4,453,798 VCF
+records, 2,895,514 rsID-indexed rows) followed by `GET
+/variants/lookup?rsid=rs80357906` through `api` returning BRCA1's real
+ClinVar classification, `"Pathogenic"`. `docs/architecture/overview.md`
+now documents this as live, not aspirational.
+
+**Real incident found and fixed during the same rollout**: two manual
+ingestion triggers sent close together ran two full ClinVar VCF scans
+concurrently — no lock existed, and the slowest step (`_build_variant_
+index_rows`, a pure-Python scan building ~2.9M in-memory tuples) had no
+logging at all, so the stall was invisible until `--previous` container
+logs were read directly. The pod was SIGKILLed (`exit 137`) with **no
+OOM evidence anywhere** — checked `dmesg -T`, `journalctl -k`, and
+`journalctl -u k3s.service` around the exact timestamp, all clean; the
+node itself had memory headroom afterward too. Root cause is
+circumstantial (two overlapping multi-hundred-MB Python object builds
+contending for the 768Mi limit) rather than confirmed via a single
+smoking-gun log line — worth knowing if this ever recurs, since the
+usual "check dmesg for OOM" playbook doesn't work here. Fixed
+(services#36): `ingest()` now holds a lock for its duration and rejects
+a second concurrent call (409), plus progress logging every 250k
+records so a future stall is visible instead of a silent multi-minute
+gap.
 
 M2 Distributed Application: services#1 (gateway), services#2 (API),
 services#3 (Kafka, ADR 0011), services#4 (PostgreSQL, ADR 0012), and
@@ -186,6 +217,35 @@ safe, reversible way to force an immediate retry instead of waiting out
 the backoff timer — not a persistent or destructive action, just a
 faster feedback loop.
 
+**Namespace scoping breaks PersistentVolumeClaims the exact same way it
+breaks Secrets** (ADR 0012 already established this for Secrets; ADR
+0019 hit it again for a PVC). `workers` tried to mount a PVC that only
+existed in `api`'s namespace — pod stuck `Pending`,
+`persistentvolumeclaim "X" not found`. Same root cause, same fix
+shape: give the consumer its own namespace-scoped copy (its own PVC, or
+in this case, redesign so only one component ever touches the volume
+at all), don't try to share either resource type across a namespace
+boundary.
+
+**`tcpSocket` liveness/readiness probes can't detect a wedged
+single-threaded app.** The kernel completes a TCP handshake into the
+accept queue regardless of whether the application ever calls
+`accept()` — a process fully blocked on CPU-bound synchronous work
+(e.g. `clinvar-service`'s pure-Python VCF scan) can still pass a
+`tcpSocket` probe indefinitely. Use a real `httpGet` health route
+whenever the app has one; a TCP-only check is a last resort for apps
+that genuinely don't expose HTTP, not a shortcut for ones that do but
+haven't had their manifest updated yet.
+
+**A step with no logging is invisible when it stalls, and "add a
+progress log line" is cheap insurance worth adding proactively** for
+any loop expected to run more than a few seconds over real (not
+fixture-sized) data — `clinvar-service`'s per-record VCF scan had zero
+log output for its ~90-second real-data runtime until this was fixed;
+during the double-ingestion incident, this silence was the reason
+`kubectl logs --previous` alone couldn't immediately show which step
+was actually stuck.
+
 ## Cluster access (this machine)
 
 k3s kubeconfig at `~/.kube/config`. `kubectl` here does **not** default
@@ -227,11 +287,24 @@ new namespace by default.
 
 - `platform`#34 (Postgres Secret regeneration, P1) — real, unresolved,
   can silently break any stateful component's next pod restart. Worth
-  picking up before it happens again on Kafka or Redis's own
-  credentials.
+  picking up before it happens again on Kafka, Redis, or
+  `clinvar-postgresql`'s own credentials.
 - M4: #21 (SLOs/alerting, depends on #20's now-live dashboards) and
   #19a (Prometheus exemplars, metric→trace pivot) are the next real
   gaps — neither started.
+- observability#13/#14 (release-ID trace propagation, `clinvar-service`
+  dashboard + `ClinVarInvalidationLag` alert, ADR 0018) — need
+  re-scoping against ADR 0019's actual Python architecture before
+  implementation; not started.
+- gnomAD's real size (~7.7GB, not the "a few hundred MB" ADR 0018
+  originally assumed) — flagged by the platform-engineer agent during
+  M5 planning, not yet tracked in a dedicated issue or resolved.
+- The manual ingestion trigger (`POST /internal/clinvar/ingest`) is
+  still fully synchronous for several minutes; services#36 stops a
+  second overlapping call from running concurrently, but the endpoint
+  itself blocking the request for the whole ingestion is still a
+  fragile shape (client/proxy timeouts) worth revisiting as a
+  fire-and-poll design if this becomes a recurring pain point.
 - observability#7 (chaos/incident-lab scenarios) — expanded with 6
   concrete scenarios earlier this session but not implemented.
 

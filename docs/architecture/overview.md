@@ -5,9 +5,12 @@ complete (Kafka, PostgreSQL, and Redis all live); M3
 Observability under way — tracing (OpenTelemetry Collector + Tempo),
 metrics (Prometheus + Grafana), logs (Loki + Alloy), and golden-signal
 dashboards for all three services are all live; long-term/multi-tenant
-metrics storage (Mimir) and alerting/SLOs are not. The diagram below
-shows the target shape, with a note underneath marking what exists
-today; it is the map, not the territory.
+metrics storage (Mimir) and alerting/SLOs are not. M5 Clinical Variant
+Annotation is live: `clinvar-service` (Python, ADR 0019) ingests real
+ClinVar data and answers lookups through `api`, proven end to end
+against the live cluster (`rs80357906` → BRCA1, "Pathogenic"). The
+diagram below shows the target shape, with a note underneath marking
+what exists today; it is the map, not the territory.
 
 ## Shape of the system
 
@@ -29,7 +32,10 @@ today; it is the map, not the territory.
 │                                                                     │
 │  Traefik (ingress) ─┬─▶ Gateway ─▶ API ─┬─▶ PostgreSQL              │
 │  cert-manager (TLS) │                   ├─▶ Redis                  │
-│                     │                   └─▶ Kafka (KRaft) ─▶ Workers│
+│                     │                   ├─▶ Kafka (KRaft) ─▶ Workers│
+│                     │                   └─▶ clinvar-service (Python)│
+│                     │                        ├─▶ its own PostgreSQL │
+│                     │                        └─▶ ClinVar VCF (PVC)  │
 │                                                                     │
 │  OpenTelemetry Collector, Prometheus, Loki, Tempo, Mimir ─▶ Grafana │
 │                                                                     │
@@ -138,9 +144,44 @@ percentiles (Boot's histogram buckets aren't enabled), and `workers`'
 "saturation" panel uses thread-pool usage as a stated proxy, since no
 Kafka consumer-lag metric is wired up yet.
 
+**M5 Clinical Variant Annotation:** `clinvar-service` (own `clinvar`
+namespace, ADR 0019) is this project's first non-JVM component —
+FastAPI + `pysam` + `psycopg` + `confluent-kafka`, built specifically
+because the domain (real ClinVar VCF/tabix data, real bioinformatics
+libraries) justified it, not a wholesale language migration. It owns
+ClinVar end to end: a weekly (and admin-triggerable, `POST
+/internal/clinvar/ingest`) download from NCBI, a real pysam tabix
+rebuild (NCBI's published `.tbi.md5` checksum sidecar turned out not to
+exist at the documented URL — a real discrepancy found live, not in
+any doc — so validation always falls through to the rebuild path), a
+dedicated Postgres instance (its own namespace, its own generated
+credential — ADR 0019 exists specifically because a shared Postgres
+Secret and a shared PVC both turned out not to be able to cross the
+`api`/`workers` namespace boundary, two real bugs that drove this
+redesign), and a `clinvar_variant_index` table for rsID lookups. `api`
+holds no ClinVar file or DB access at all; it calls `clinvar-service`
+over HTTP (`ClinVarServiceClient`, Spring `RestClient`, same pattern as
+`gateway`→`api`, ADR 0010) and fronts the result with the Redis
+cache-aside layer from ADR 0016, invalidated on write via a Kafka event
+(`clinvar.ingestion.completed`) carrying the specific cache keys a new
+release actually changed — this project's first skewed-access,
+invalidate-on-write cache pattern, as opposed to `work-items`' pure
+TTL hygiene. Proven end to end against the real cluster: a real
+ingestion run (4,453,798 VCF records, 2,895,514 rsID-indexed rows) and
+a real `GET /variants/lookup?rsid=rs80357906` through `api` returning
+BRCA1's real ClinVar classification, `"Pathogenic"`. **Known gap:** the
+ingestion endpoint runs synchronously for several minutes; a
+concurrency guard (services#36) now rejects a second overlapping
+trigger (409) after two overlapping manual triggers once ran two full
+VCF scans side by side and took the pod down, but the endpoint itself
+is still blocking rather than fire-and-poll.
+
 **Not yet:** Mimir (long-term/multi-tenant metrics storage,
 backlog #18a, a separate experiment not required for the single-node
-Prometheus already live); alerts and SLOs (backlog #21, M4).
+Prometheus already live); alerts and SLOs (backlog #21, M4);
+`ClinVarInvalidationLag` alert and release-ID trace propagation for
+`clinvar-service` (observability#13/#14, re-scoping against ADR 0019's
+actual Python architecture, not yet started).
 
 ## Boundaries
 
