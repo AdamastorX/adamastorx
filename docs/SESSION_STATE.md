@@ -6,9 +6,63 @@ threads, and things the next session shouldn't have to re-discover the
 hard way. Prune/rewrite freely as work completes; this file describes
 *current* state, not history (git history is the record of the past).
 
-Last updated: 2026-07-26.
+Last updated: 2026-07-27.
 
 ## Where things stand
+
+**Chaos scenarios 1 and 2 (backlog #23) done live, real fact packs in
+`observability/chaos/`.** Real, unscripted incidents surfaced in both.
+Scenario 2's is the most reusable for future work: **nested app-of-apps
+self-healing defeats a live sync pause.** `root` (the GitOps entrypoint)
+manages every child `Application` object under `argocd/apps/` as one of
+its own tracked resources — a `kubectl patch` on a child's
+`spec.syncPolicy.automated` gets reverted by `root`'s own selfHeal just
+as fast as `root` reverts any other drift. To genuinely pause one
+component's sync for a test, the only way that sticks is a real,
+committed git change to that Application's manifest (removing
+`automated`), and even then `root` itself needs an explicit
+`argocd.argoproj.io/refresh=hard` (not just a refresh on the child) to
+pick up the change to the tracked file — refresh the parent that tracks
+the manifest, not the child whose live object you're diffing. Revert
+the same way (a real PR), and expect the same refresh lag.
+
+**Two independent integration points share the same "blocks for tens of
+seconds before failing" shape**: Kafka's producer `send()` (found in
+scenario 1, ~60s `max.block.ms`) and HikariCP's connection acquisition
+(found in scenario 2, ~30s default). Neither is what "fire-and-forget
+async publish" or "connection pooling" sound like they'd do — both hang
+the calling HTTP thread first. New backlog #43 tracks re-examining the
+Kafka side; the Postgres side doesn't have its own item yet (the
+underlying HikariCP timeout is a reasonable default, the real finding is
+just that it exists and is user-facing).
+
+**Readiness probe blind spot, confirmed live (new backlog #44)**: `api`'s
+readiness group never reflected a real, 6-minute-sustained PostgreSQL
+outage — Kubernetes kept routing traffic to a pod that could not
+actually serve a DB-backed request. The full `/actuator/health` endpoint
+correctly hung (confirming the DataSource check itself works), it's
+specifically excluded from Boot's readiness *group*. Very likely
+Spring's own intentional design (avoid one DB blip pulling every replica
+out of rotation) rather than a bug — but with this project's single
+replica per service, that specific tradeoff doesn't actually apply, so
+it's worth a stated decision rather than an unexamined default.
+
+**`local-path`'s unenforced PVC quota (already known) ruled out "PVC
+full" as a safely-testable chaos scenario entirely** — the "2Gi" a PVC
+requests is nominal only; the real mount is the node's shared disk, and
+deliberately filling it risks the whole node, not just the one
+component. #23's scenario 2 dropped that half rather than attempting it.
+
+**No existing alert caught either brief-outage window on the first
+try** in both scenarios 1 and 2 — `ApiHighErrorRate`/the Kafka-adjacent
+signals all need a sustained 5-minute window of real, non-zero traffic
+to trip, and this project's actual traffic (manual/test requests) rarely
+produces that on its own. Scenario 2 eventually proved `ApiHighErrorRate`
+*does* fire correctly once ~6 minutes of real sustained failing traffic
+was generated on purpose — the alert itself works, the gap is realistic
+traffic volume, not the rule. A real notification was confirmed
+delivered to the live `ntfy.sh` topic, the first real end-to-end alert
+fire on this cluster.
 
 **Simplification pass executed (ADR 0021).** The user asked to argue for
 maximum simplification — remove anything that doesn't earn its
