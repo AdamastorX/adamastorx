@@ -6,9 +6,26 @@ threads, and things the next session shouldn't have to re-discover the
 hard way. Prune/rewrite freely as work completes; this file describes
 *current* state, not history (git history is the record of the past).
 
-Last updated: 2026-07-27.
+Last updated: 2026-07-28.
 
 ## Where things stand
+
+**Local dev TLD switched from `.dev` to `.test`, real incident.**
+Every fixed local address (`api`/`grafana`/`prometheus`/`alertmanager`/
+`clinvar-viewer`.local.adamastorx.dev) broke in both Chrome and Firefox
+with an unrecoverable HSTS error ("you cannot add an exception"), even
+before the CA had been trusted anywhere — confirmed live in both
+browsers, not a config mistake. `.dev` is Google-owned and
+HSTS-preloaded unconditionally into every major browser; unlike a
+normal self-signed-cert warning, there is no manual override at all on
+a `.dev` hostname with an untrusted cert. Switched every hostname to
+`*.local.adamastorx.test` — IANA-reserved for exactly this case, never
+delegated, not on any preload list. **Separately confirmed while fixing
+this**: Chrome/Chromium on Linux does not read the system OpenSSL trust
+store `update-ca-certificates` populates — it has its own NSS database
+(`certutil -d sql:$HOME/.pki/nssdb ...`), and Firefox has a third,
+separate store again. All three now documented in
+`platform/kubernetes/cert-manager-issuers/README.md`.
 
 **Chaos scenarios 1 and 2 (backlog #23) done live, real fact packs in
 `observability/chaos/`.** Real, unscripted incidents surfaced in both.
@@ -73,7 +90,7 @@ Application, Ingress, TLS cert) — the same shape as `whoami`, the
 original one-time Traefik+TLS proof, now redundant. Both **removed
 entirely, verified live**: `services/gateway` and `platform/kubernetes/
 {gateway,whoami}` deleted, both namespaces deleted from the live
-cluster, `api` given its own Ingress+cert (`api.local.adamastorx.dev`,
+cluster, `api` given its own Ingress+cert (`api.local.adamastorx.test`,
 `adamastorx-ca`), confirmed reachable through Traefik with real TLS
 (`curl --resolve ... --cacert adamastorx-ca.crt` → `200`). Also cut:
 gnomAD enrichment (never built, ~7.7GB real size didn't fit this
