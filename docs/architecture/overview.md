@@ -58,7 +58,7 @@ once. The API service (Maven module in `services`, Spring Boot/webmvc/
 actuator) is built, published to GHCR, and deployed in-cluster in its
 own namespace (manifests in `platform/kubernetes/api/` +
 `argocd/apps/api.yaml`) — **with its own public Ingress and TLS
-certificate** (`api.local.adamastorx.dev`, ADR 0021), the live
+certificate** (`api.local.adamastorx.test`, ADR 0021), the live
 Traefik+TLS+service path. This replaces an earlier design (ADR 0010)
 where a separate `gateway` service forwarded to `api`: `gateway` never
 grew past one placeholder route and was removed entirely (ADR 0021),
