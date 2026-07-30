@@ -17,6 +17,47 @@ state.
 | **M3 Observability** | Full telemetry pipeline (OTel → Prometheus/Mimir, Loki, Tempo) with baseline dashboards. |
 | **M4 Reliability** | SLOs, alerting, runbooks, failure testing — the system can be operated, not just run. |
 | **M5 Clinical Variant Annotation** | Real ClinVar/gnomAD-backed variant lookup, added alongside the work-item domain (ADR 0018) — the project's first skewed cache access pattern, invalidation-on-write, and data-provenance story. |
+| **M6 Real Demand and Progressive Delivery** | Continuous, shaped traffic replaces an idle cluster, and deploys become canaries gated on the SLOs that traffic finally makes real. |
+| **M7 Multi-Node Substrate** | Rebuild on the dedicated host as a real multi-node cluster — Cilium/Hubble, the project's first NetworkPolicies, replicated storage, the drain/node-loss exercises one node cannot produce, and an Istio ambient mesh (mTLS + traffic control) layered on *after* Cilium so failures stay attributable to one layer. |
+| **M8 Application Logic: Delivery Semantics and Stream State** | New services chosen for the operational shapes the project lacks — guaranteed fan-out delivery, long-running async jobs, and stateful stream processing. |
+| **M9 New Signal Classes** | Continuous profiling and admission-time policy — one new class of evidence, one new class of control, each grounded in an incident that already happened. |
+| **M10 Platform Automation: Elastic Scaling, Chaos, and Cost** | KEDA event-driven autoscaling on Kafka lag, Chaos Mesh formalizing the manual chaos exercises, and Kubecost cost visibility — capabilities that earn their keep once load is real and workloads are diverse. |
+| **M11 AI-Assisted SRE** | An `sre-agent` over the project's own Loki/Tempo/Prometheus/events/Alertmanager signals — a real incident-triage agent, evaluated honestly against the human-written fact packs. |
+| **M12 Bioinformatics Workloads (reopened)** | The bio-pipeline milestone ADR 0021 closed, reopened by ADR 0025 for the changed goal — a Metadata API, MinIO, real Nextflow pipelines, a saga-shaped Kafka lifecycle, a Notification service, and real licensed public data. |
+
+M6–M9 are the expansion phase (ADR 0022). The goal changed — breadth and
+novelty, on top of the tight core ADR 0021 produced — and ADR 0022 states
+explicitly which of ADR 0021's cuts stand (gnomAD, HGVS/liftover,
+`gateway`, `whoami`, solo postmortems, burn-rate policy) and which are
+reopened *in changed form* because their stated premise changed
+(#34 → #45, #23b → #52). The remaining M4 work (#23 scenario 3, #23a,
+#21d, #21e, #42, #43, #44) and the cross-cutting items (#31, #32) are
+not superseded by any of this and mostly gate it: **#23a in particular is
+a hard prerequisite for all of M7** — migrating hosts without a proven
+restore is how this project loses its data.
+
+M6 has no new dependencies and unblocks the rest: chaos scenario 3
+(consumer lag) is not meaningfully testable until #45 produces a
+sustained produce rate, and both #46's canary analysis and #57's profiles
+are meaningless against an idle cluster. M7 is gated on hardware and on
+#23a. M8 and M9 can run in parallel with each other.
+
+M7 also carries the Istio ambient mesh (ADR 0024, backlog #59–#62),
+sequenced *after* Cilium (#49) on purpose: Cilium is the CNI and rides the
+rebuild, Istio is layered on separately so a broken dataplane is
+attributable to one layer, not two. The mesh closes ADR 0010's stated
+"no in-cluster auth" gap (mTLS) and adds the traffic-control layer — fail-
+fast timeouts, circuit breaking — the two live chaos scenarios showed the
+project needs, which is why ADR 0024 overturns ADR 0023's mesh exclusion.
+
+M10–M12 extend the expansion phase further. M10 (KEDA, Chaos Mesh,
+Kubecost) and M11 (the `sre-agent`) mostly gate on #45's real traffic and
+can run alongside M8/M9. **M12 (bioinformatics workloads, ADR 0025) is the
+deliberate reopening of the milestone ADR 0021 closed** — reopened because
+the goal shifted (ADR 0022) and health-tech roles make real licensed
+domain data an asset, not the "bio coat of paint" liability it correctly
+was for a tight SRE portfolio. M12 lands after M7's multi-node/replicated-
+storage substrate (#48/#51), which its data volume needs.
 
 A milestone is Done (Definition of Done, `.claude/PROJECT.md`) when every
 item in it is closed — that gate is unchanged. What's relaxed is only the
