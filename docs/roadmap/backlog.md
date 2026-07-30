@@ -407,6 +407,30 @@ everything it has ingested.
 - Dependencies: #48, #51, #23a.
 - Priority: P1. Labels: `platform`, `observability`.
 
+**59. Istio ambient mesh, sprint 1: mTLS + ingress/egress gateway (ADR 0024)**
+- Purpose: ADR 0010 states plainly "no auth between in-cluster services" as a deliberate M1 simplification, and nothing has revisited it since — every in-cluster call (`api`→`clinvar-service`, everything→Kafka/Postgres) is unauthenticated plaintext. ADR 0024 overturns ADR 0023's mesh exclusion to close that gap and to give the project a traffic-control layer (#60) it does not have. This sprint is the mesh's foundation only: ambient mode specifically (no per-pod sidecar — a per-node ztunnel plus waypoints where L7 is actually needed), chosen as the lighter and more novel-to-write-about model. Layered on **after** Cilium (#49) is proven, as its own change, so a dataplane failure is attributable to one layer, not two at once.
+- Acceptance Criteria: ambient Istio installed on the Cilium cluster as an ArgoCD Helm Application (`argocd/apps/istio.yaml`, ADR 0003 pattern); existing workloads brought into the mesh with all cross-namespace paths confirmed healthy (`api`→`clinvar-service`, everything→Kafka, Prometheus scrapes, Alloy→Loki); STRICT `PeerAuthentication` enforcing mTLS mesh-wide, verified by a denied plaintext connection observed live, not assumed; an Istio ingress/egress gateway stood up. The Cilium↔Istio integration edges are worked and written down, not glossed — kube-proxy replacement stays Cilium's (ambient does not reintroduce it), and how ambient's ztunnel/waypoint dataplane sits on Cilium's eBPF datapath is documented in `docs/architecture/overview.md`'s network-dataplane section, including any real friction hit. Istio does **not** take over L7 network policy — that stays Cilium's (#50); the boundary is stated so neither is bought twice.
+- Dependencies: #49 (Cilium proven first — non-negotiable, for failure attribution). ADR 0024.
+- Priority: P1. Labels: `platform`, `security`, `observability`.
+
+**60. Istio ambient mesh, sprint 2: retries, timeouts, circuit breaking, outlier detection (ADR 0024)**
+- Purpose: the direct fix for the exact failure both live chaos scenarios recorded — a downstream outage does not fail fast, it hangs the calling HTTP thread for tens of seconds before erroring (~60s Kafka `max.block.ms`, `observability/chaos/01-*.md` and #43; ~30s HikariCP acquisition, `observability/chaos/02-*.md`). This is traffic *control*, not the traffic *visibility* OTel/Prometheus already provide, and it is the same problem in two languages (Java `api`, Python `clinvar-service`) — which is why a mesh solving it once at the dataplane beats a per-client, per-language fix, the argument ADR 0024 makes against ADR 0023's "handful of lines in two clients."
+- Acceptance Criteria: per-route timeout, retry, circuit-breaking, and outlier-detection policy applied via Istio to at least the `api`→`clinvar-service` and the application→Kafka/Postgres paths, with an explicit timeout budget shorter than the ~30–60s hangs above. Proven live by re-running chaos scenarios 01 and 02 with the mesh in place: the caller now fails fast with a clear error instead of hanging, with before/after latency recorded as a dated postscript in the existing fact packs. Outlier detection confirmed ejecting an unhealthy endpoint under a partial-failure injection. Mesh telemetry (Istio's own metrics) scraped into the existing Prometheus, not a parallel stack.
+- Dependencies: #59.
+- Priority: P1. Labels: `platform`, `observability`.
+
+**61. Istio ambient mesh, sprint 3: fault injection as a deliberate chaos exercise (ADR 0024)**
+- Purpose: Istio delay/abort fault injection is a genuinely new fault-injection tool for this project — application-layer, targeted per-route, and injectable without touching the app or killing infrastructure (unlike the broker/DB kills of scenarios 01/02). ADR 0022's content goal values this kind of deliberate, controlled experiment; done as its own sprint rather than folded into #60 so the resilience policy (#60) is proven *by* the fault injection here, closing the loop.
+- Acceptance Criteria: an Istio `VirtualService` fault (HTTP delay and abort) injected on a real path, with the resulting behaviour — whether #60's timeouts/retries/circuit-breaking absorb it, whether any SLO alert fires, blast radius, recovery — recorded as a fact pack in `observability/chaos/` following the existing convention. At least one injection tuned to confirm #60's circuit breaker opens as designed. Fault removed and steady state confirmed restored.
+- Dependencies: #60.
+- Priority: P2. Labels: `observability`, `platform`.
+
+**62. Resolve the Argo Rollouts / Istio traffic-splitting overlap (ADR 0024)**
+- Purpose: #46 installs Argo Rollouts as the progressive-delivery controller with an SLO-analysis gate; once Istio (#59) is present, both tools can independently split traffic, which is a real overlap ADR 0024 requires resolving as a stated decision rather than leaving two mechanisms fighting over the same weights. Argo Rollouts and Istio have a real, supported integration where Rollouts drives Istio `VirtualService` subset weights — Rollouts stays the *controller*, Istio becomes the traffic-management *provider*.
+- Acceptance Criteria: `api`'s `Rollout` (from #46) reconfigured to use Istio as its `trafficRouting` provider (driving `VirtualService`/`DestinationRule` subset weights) instead of Rollouts' own splitting; a canary proven live to shift weight through Istio while the #46 `AnalysisTemplate` still gates on the same Prometheus SLIs. The decision recorded in #46's runbook and referenced from ADR 0024, so the trail from "two tools split traffic" to "one controls, one provides" is explicit. Interaction with ArgoCD `selfHeal` re-checked (a mid-canary `VirtualService` is drift by ArgoCD's definition), reusing #46's resolution.
+- Dependencies: #46, #59.
+- Priority: P2. Labels: `platform`, `observability`.
+
 ---
 
 ## M8 Application Logic: Delivery Semantics and Stream State
@@ -465,6 +489,102 @@ happened rather than in a tool list. Can run in parallel with M8.
 - Acceptance Criteria: a policy engine (Kyverno is the lighter fit for this scale; Gatekeeper/OPA is defensible if the choice is argued) deployed as an ArgoCD Application, with a small set of policies that reflect this project's own actual lessons rather than a generic starter pack — require CPU/memory requests and limits (#35), require probes to be `httpGet` rather than `tcpSocket` where the app exposes HTTP (the ADR 0019 rollout lesson), disallow `:latest` image tags (ADR 0008's SHA-tag policy, currently convention only). Policies run in audit mode first with the existing violations reported, then enforced. **The webhook-down failure mode is deliberately exercised and documented**: scale the policy engine to zero and attempt a deploy, with the resulting behaviour, blast radius, and recovery recorded as a fact pack in `observability/chaos/`, and the `failurePolicy` choice (`Fail` vs `Ignore`) made as a stated decision with its reasoning. An alert fires if the policy engine is unavailable.
 - Dependencies: #35.
 - Priority: P2. Labels: `platform`, `security`.
+
+---
+
+## M10 Platform Automation: Elastic Scaling, Chaos, and Cost
+
+Three platform capabilities that each gain their value once the cluster
+carries real, continuous, and diverse load (#45, M12) rather than a single
+idle workload — event-driven autoscaling, chaos automation, and cost
+visibility. None is on the excluded-tools list; each earns its place by a
+gap already recorded, per ADR 0022's rule. Can run in parallel with M8/M9.
+
+**63. KEDA: event-driven autoscaling on Kafka consumer lag**
+- Purpose: every scaling decision this project can currently make is CPU/memory-based (HPA-shaped), and `workers` — a Kafka consumer — is exactly the workload that metric fits worst: its real pressure signal is consumer-group lag (#21a added the metric), not CPU. Chaos scenario 3 (consumer-group lag, still open) and #45's sustained produce rate make lag a real, varying signal for the first time. KEDA scaling `workers` on lag teaches a genuinely new Kubernetes pattern (a `ScaledObject` driving replica count from an external event source, including scale-to-zero) that HPA cannot express — and it does it against a real signal, not a synthetic one.
+- Acceptance Criteria: KEDA deployed as an ArgoCD Helm Application (`argocd/apps/keda.yaml`, ADR 0003 pattern); a `ScaledObject` scales `workers` on real Kafka consumer-group lag, proven live by driving lag up with #45's generator and observing scale-out, then scale-in as the backlog drains. Interaction with the existing lag *alert* (#21) is stated: an autoscaler reacting to lag and an alert firing on lag must not fight or double-count — the thresholds are reconciled explicitly. Scale-to-zero behaviour (and its cold-start cost, applying the #35/#57 JVM cold-start lesson) is either used with a stated reason or explicitly disabled with one. Scaling events visible in Prometheus/Grafana.
+- Dependencies: #45, #23 scenario 3.
+- Priority: P2. Labels: `platform`, `observability`.
+
+**64. Chaos Mesh: formalize the manual chaos exercises**
+- Purpose: this project already does real chaos engineering — three live scenarios with fault packs (`observability/chaos/`), run by hand (scaling a broker/DB down, git-committing a sync-policy change). Chaos Mesh formalizes that existing practice as declarative, repeatable experiments (pod-kill, network delay/partition/loss, IO fault, time skew) rather than manual, one-off steps. This is an upgrade to territory the project already occupies, not new territory — low risk, real value: the same scenarios become re-runnable on demand (which #47 wants anyway) and gain fault types the manual method could not safely reach (a real network partition between two namespaces, distinct from Istio's app-layer fault injection #61).
+- Acceptance Criteria: Chaos Mesh deployed as an ArgoCD Application; at least one existing manual scenario (01 Kafka or 02 Postgres) re-expressed as a declarative Chaos Mesh experiment and confirmed to reproduce the original finding; at least one genuinely new fault the manual method could not do safely (e.g. a `NetworkChaos` partition or delay between `api` and `clinvar-service`) run and recorded as a fact pack. The relationship to Istio fault injection (#61, app-layer) vs Chaos Mesh (infra/network-layer) stated so the two tools' scopes don't blur. Experiments are version-controlled, not click-built.
+- Dependencies: #45.
+- Priority: P2. Labels: `observability`, `platform`.
+
+**65. Kubecost: cost-per-namespace / per-workload visibility**
+- Purpose: the project has no view of what any workload actually *costs* to run — CPU/memory/storage allocated vs. used, per namespace and per workload. On one small node with one workload family that was uninteresting; it becomes genuinely useful once there is real workload diversity (M12's bio pipelines, MinIO object storage, Nextflow Jobs) competing for the same finite host, where "which namespace is eating the node" is a real question. Standalone value even before that: it turns the #35 resource-governance work (requests/limits) from a guess into a measured allocation-vs-usage efficiency number.
+- Acceptance Criteria: Kubecost (or OpenCost, if the lighter option is argued and chosen — rejected alternative recorded) deployed as an ArgoCD Application, exposed on the standard `*.local.adamastorx.test` + `adamastorx-ca` Ingress pattern; cost/allocation broken down per namespace and per workload, with allocation-vs-actual-usage efficiency visible for at least the M12 workloads once they exist. Storage cost attributed against the real `local-path`/replicated (#51) PVCs. A short written read of what it shows — where the cluster's real resource spend actually goes — rather than just standing the dashboard up.
+- Dependencies: #48.
+- Priority: P2. Labels: `platform`, `observability`.
+
+---
+
+## M11 AI-Assisted SRE
+
+The single best new idea from the external second-opinion review, absent
+from the original expansion plan: an actual SRE agent over the project's
+own telemetry, not a chatbot wrapper. It ties directly to the fact that
+this project is itself built end-to-end via an AI coding agent — "I built
+an AI SRE co-pilot for my own homelab, here's what it actually caught vs.
+missed" is a differentiated, genuinely novel article angle, which is why
+it earns its own milestone (ADR 0022's content goal).
+
+**66. `sre-agent`: incident-triage agent over the project's own telemetry**
+- Purpose: every incident this project has diagnosed was diagnosed by a human reading across Loki, Tempo, Prometheus, `kubectl` events, and Alertmanager and correlating by hand — the exact cross-signal correlation an agent can do. This is a real agent: on a trigger (an Alertmanager alert, or on demand), it consumes Loki logs + Tempo traces + Prometheus metrics + Kubernetes events + Alertmanager state for the affected window and produces an incident summary, a root-cause *suspicion*, an affected-services list, and concrete next-step suggestions. It is grounded in real signals the project already emits, and its honest evaluation — what it caught, what it missed, what it hallucinated — against the real fact packs already written (`observability/chaos/01/02`) is the actual portfolio content, not the demo.
+- Acceptance Criteria: a service (own namespace, own ArgoCD Application; language chosen on ADR 0019's rule) that, given an incident window, queries Loki/Tempo/Prometheus/Kubernetes-events/Alertmanager (read-only — it observes, it does not act on the cluster) and emits a structured incident report (summary, suspected root cause, affected services, suggested next steps). Run against at least the two existing chaos scenarios re-triggered live (via #64), with its output compared honestly to the human-written fact pack for each — agreements, misses, and false leads all recorded. The agent's own reasoning is itself traced/logged so its behaviour is observable like any other service. Cost and latency per invocation recorded. Explicitly out of scope: any write/remediation action on the cluster — this is a co-pilot, not an operator.
+- Dependencies: #45, #21 (real alerts and traffic to reason over), #49/#57 (richer signals help but are not blocking).
+- Priority: P2. Labels: `observability`, `backend`.
+
+---
+
+## M12 Bioinformatics Workloads (reopened, ADR 0025)
+
+ADR 0021 closed the reserved bio-pipeline milestone (#30) as the right call
+for a tight SRE portfolio. ADR 0022 shifted the goal (breadth, novelty,
+more application logic) and ADR 0025 reopens this consciously — real
+domain workloads are an asset for the health-tech roles now being targeted,
+and the pipeline lifecycle is a new operational shape, not bio-for-bio's-
+sake. This is a **new milestone**, not a verbatim restoration of #30 (which
+was M6; M6 is now Real Demand). Lands after M7's multi-node/replicated-
+storage substrate, which the data volume needs. See ADR 0025 for the full
+reopening rationale and how ADR 0021's "bio coat of paint" risk is bounded.
+
+**67. `metadata-service`: study/sample/pipeline-run domain model (Spring Boot)**
+- Purpose: the project's Java services so far are a placeholder CRUD domain (`work-items`); this is real domain modelling — studies, anonymized patients/samples, and pipeline-run metadata, with real relationships (a study has samples; a sample has pipeline runs; a run has a status and provenance). Spring Boot matches the existing Java convention for CRUD-shaped services (ADR 0019's language rule). It is the system of record the pipeline lifecycle (#70) and notifications (#71) hang off, and deliberately *not* another `work-items` clone — the relational shape and the anonymization boundary (no PHI, only de-identified identifiers, an explicit modelling constraint) are the point.
+- Acceptance Criteria: a `metadata-service` in its own namespace with its own Postgres (ADR 0019's namespace-local pattern, not a shared DB), owning studies/samples/pipeline-runs with a versioned Flyway schema; CRUD plus the query paths the pipeline and notification services need; anonymization stated as a modelling invariant (only de-identified IDs persisted) and enforced/tested, not assumed. Instrumented with OTel like every other service; a golden-signal dashboard and an SLO row added to ADR 0020's table. Real relationships proven by a test that walks study→sample→run.
+- Dependencies: #48 (multi-node substrate).
+- Priority: P2. Labels: `backend`, `architecture`.
+
+**68. MinIO object storage for real pipeline files (FASTQ/BAM/VCF)**
+- Purpose: the project has never had an object-storage data plane — all state is Postgres or telemetry PVCs. Real bioinformatics files (FASTQ inputs, BAM/VCF intermediates and outputs) are large binary objects that belong in object storage, not a database, and MinIO is the self-hosted S3-compatible answer. This is the object store #30 wanted; ADR 0025 states why it is justified now (a new stateful component and data plane to operate, back up, and reason about) where it was not before (bio breadth for a bio audience). It gains real teeth on the multi-node cluster with replicated storage (#51) behind it.
+- Acceptance Criteria: MinIO deployed as an ArgoCD Application, backed by #51's storage layer, exposed on the standard Ingress pattern with an `adamastorx-ca` cert; buckets for pipeline inputs/intermediates/outputs with a stated lifecycle/retention policy (object storage on a finite node grows unbounded otherwise — the #21d disk lesson applies); credentials as real Kubernetes Secrets reconciled with #36's secret-provisioning approach, not a second mechanism. Included in #23a's backup/restore discipline (or explicitly stated as regenerable-from-source and not backed up, per dataset). `metadata-service`/Nextflow (#69) read and write real objects, proven with a real file round-trip.
+- Dependencies: #51 (replicated storage), #67.
+- Priority: P2. Labels: `platform`, `backend`.
+
+**69. Nextflow pipeline engine executing real pipelines on Kubernetes**
+- Purpose: a real pipeline engine actually running real bioinformatics pipelines — not a mocked stand-in, which is the line ADR 0025 draws for this to be worth doing. Nextflow with its Kubernetes executor is a new source of Kubernetes Jobs and a new failure surface the project has never operated: a multi-step DAG where step 3 can fail after steps 1–2 wrote real intermediates to MinIO, work orphaned by a pod restart mid-pipeline, and resource pressure from real compute competing with the platform (where #65 Kubecost and #63 KEDA become relevant). The SRE substance is running and operating the pipeline, not the alignment algorithm inside it.
+- Acceptance Criteria: Nextflow deployed with its Kubernetes executor, running at least one real public pipeline (e.g. an nf-core workflow) end-to-end on real input data from MinIO (#68), writing real outputs back. A pipeline run is tracked as a `pipeline-run` row in `metadata-service` (#67) with real status transitions. A run interrupted by a pod kill mid-DAG is proven to reach a terminal state (resumed or explicitly failed with a reason), never left running forever — the orphaned-job recovery shape #54 introduced, now over a multi-step pipeline. Resource footprint recorded (feeds #65). Explicitly bounded: running real public pipelines, not authoring novel bioinformatics.
+- Dependencies: #67, #68.
+- Priority: P2. Labels: `platform`, `backend`.
+
+**70. Kafka pipeline-lifecycle events: a multi-stage saga, not a single hop**
+- Purpose: the project's two existing event shapes are `work-items` (simple produce/consume, fire-and-forget) and ClinVar (one release-diff event, one cache-invalidation consumer). The pipeline lifecycle is a genuinely new shape: an ordered, multi-stage, saga-like sequence with failure branches — `PipelineStarted` → `PipelineFinished` / `AnalysisFailed` → `SampleImported` — modelling a *process* with states, not a single hop. Stated explicitly because ADR 0022 requires new work to add an operational shape the project lacks: this is the first event stream where ordering, stage transitions, and a failure path (`AnalysisFailed` short-circuiting `SampleImported`) all matter and must be reasoned about together.
+- Acceptance Criteria: Nextflow runs (#69) emit lifecycle events to Kafka at each stage transition, with the event schema and ordering guarantees documented (what a consumer may assume about order, what happens on redelivery). `metadata-service` updates its `pipeline-run` state from these events, so the system-of-record reflects the saga. The failure branch is real and tested: an injected `AnalysisFailed` is proven to prevent the `SampleImported` that a success would have produced, and the run lands in a correct terminal state. Traces span Nextflow→Kafka→consumers, extending the correlation story. This is distinguished in writing from #53's fan-out-delivery shape — that is one event to many subscribers; this is many ordered events modelling one process.
+- Dependencies: #69, #67.
+- Priority: P2. Labels: `backend`, `architecture`.
+
+**71. `notification-service`: the first new Kafka consumer topology since `workers` (Spring Boot)**
+- Purpose: a Notification service consuming the pipeline-lifecycle events (#70) — the first genuinely new Kafka consumer topology this project has had since `workers` was built in M2. Where `workers` consumes one topic and logs, this consumes a saga's events and reacts to *state*, not just messages: notify on `PipelineFinished`, escalate on `AnalysisFailed`, stay quiet on intermediate stages. Spring Boot per the Java CRUD/messaging convention. Notification delivery reuses the ntfy channel #21c already proved works, and the idempotency lesson #53 raises (a delivery must be exactly-once across redeliveries) applies here too.
+- Acceptance Criteria: a `notification-service` in its own namespace consuming #70's lifecycle topic, delivering notifications keyed on terminal/failure states (not every event), with delivery idempotent across redelivery and proven so by a redelivery test. A permanently-failing delivery is dead-lettered, not blocking the consumer (the #53 pattern). Consumer lag and delivery metrics exposed with a dashboard and an SLO row (ADR 0020's table). Traces span the full `Nextflow→Kafka→notification-service→ntfy` path.
+- Dependencies: #70, #21c.
+- Priority: P2. Labels: `backend`, `observability`.
+
+**72. Real public dataset ingestion: genomics and medical imaging, licensing friction included**
+- Purpose: real, correctly-licensed public data, explicitly not synthetic — matching the ClinVar precedent that is already one of the project's most defensible content threads. Genomics (1000 Genomes, TCGA, GEO — on top of the ClinVar already in hand) and, as a substantial new domain with a different data-volume and streaming shape, medical imaging (DICOM files, TCIA). The real value here includes the *friction*: licensing and access are not uniform, and that is a genuine constraint to surface honestly, not gloss — MIMIC specifically requires a credentialed data-use agreement (not just a download), so it is called out as gated, and each source's license/access terms are recorded before ingestion.
+- Acceptance Criteria: at least one genomics source (1000 Genomes / TCGA / GEO) and one imaging source (TCIA/DICOM) ingested into MinIO (#68) as real files feeding real pipeline runs (#69), with each source's license and access mechanism documented in `docs/data-sources.md` (the ClinVar precedent) before its data is stored. MIMIC's credentialed-DUA requirement is recorded explicitly as a real access constraint — either the DUA is obtained and stated, or MIMIC is documented as out-of-scope-pending-DUA rather than silently skipped. Data volume and the streaming/large-object handling (imaging especially) recorded, feeding #65's cost view and #68's retention policy. No synthetic stand-in is substituted for a real dataset anywhere.
+- Dependencies: #68, #69.
+- Priority: P2. Labels: `backend`, `documentation`.
 
 ---
 

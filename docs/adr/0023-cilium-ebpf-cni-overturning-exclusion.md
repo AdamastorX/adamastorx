@@ -23,6 +23,12 @@ Four of the five are re-examined here and **stay excluded**:
   truth for routing, to re-tell a story the OTel stack already tells
   better. The one genuinely uncovered piece — L7-aware policy — is
   available from Cilium below without a mesh. **Stays excluded.**
+  *(Update: this specific conclusion was subsequently overturned by ADR
+  0024, which answers the three points above with the traffic-control /
+  fail-fast gap and the ADR 0010 mTLS gap this bullet did not weigh. The
+  bullet stands as the honest record of the argument ADR 0024 had to beat;
+  Cilium's L7 policy and Istio's traffic behaviour do not overlap — see
+  0024.)*
 - **Vault.** There *is* real, recurring secret pain here: platform#34's
   Bitnami-generated Secret silently regenerated twice, and backlog #36
   is still open to fix its root cause. But Vault's actual root-cause fix
@@ -125,6 +131,8 @@ either.
   removed from it; **service mesh, Vault, Crossplane, and Backstage
   remain**, now with the reasoning above on record rather than as a bare
   list. Anything reopening one of those four cites this ADR's specific
-  argument against it.
+  argument against it. *(ADR 0024 subsequently does exactly that for the
+  service mesh and removes it from the list too; Vault, Crossplane, and
+  Backstage remain excluded on the reasoning above.)*
 - `docs/architecture/overview.md` gains a network-dataplane section it
   has never had, since until now there was nothing to say about it.
