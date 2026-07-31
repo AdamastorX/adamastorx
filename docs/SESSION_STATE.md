@@ -6,7 +6,7 @@ threads, and things the next session shouldn't have to re-discover the
 hard way. Prune/rewrite freely as work completes; this file describes
 *current* state, not history (git history is the record of the past).
 
-Last updated: 2026-07-28.
+Last updated: 2026-07-31.
 
 ## Where things stand
 
@@ -518,12 +518,35 @@ new namespace by default.
 - gnomAD's real size (~7.7GB, not the "a few hundred MB" ADR 0018
   originally assumed) — flagged during M5 planning, not yet tracked in
   a dedicated issue or resolved.
-- The manual ingestion trigger (`POST /internal/clinvar/ingest`) is
-  still fully synchronous for several minutes; services#36 stops a
-  second overlapping call from running concurrently, but the endpoint
-  itself blocking the request for the whole ingestion is still a
-  fragile shape (client/proxy timeouts) worth revisiting as a
-  fire-and-poll design if this becomes a recurring pain point.
+- **Fixed** (backlog #54, services#46, platform#69 — PRs open, pending human merge): `POST
+  /internal/clinvar/ingest` no longer blocks for the whole multi-minute
+  ingestion — it now returns `202` with a job id immediately (real,
+  measured: 51ms in the live proof below), and job state
+  (`queued`/`running`/`succeeded`/`failed`/`cancelled`) lives in a new
+  `clinvar_ingestion_job` table in `clinvar-service`'s own Postgres, not
+  in memory. `GET /internal/clinvar/ingest/{job_id}` polls state plus
+  real progress (the existing per-250k-record checkpoint, now also
+  written to the row). services#36's `threading.Lock` is **retired**,
+  not kept alongside: `clinvar_ingestion_job`'s own partial unique index
+  (at most one `queued`/`running` row) is the concurrency guard now,
+  and unlike an in-process lock it survives a pod restart, which is the
+  actual property this item needed. Cancellation
+  (`POST .../ingest/{job_id}/cancel`) is proven live to stop the
+  in-flight scan, not just relabel the row. **Live-verified against a
+  real deployed instance on the real cluster, real NCBI ClinVar data**:
+  triggered a real ingestion (4,458,175 records scanned, matching the
+  documented ~4.45M real-data baseline), force-killed the pod
+  (`kubectl delete pod --grace-period=0 --force`) while the job was
+  still `running`, and confirmed on the new pod's restart that
+  `reconcile_orphaned_jobs()` marked it `failed` with reason "orphaned:
+  process restarted while this job was still running" — never left
+  `running` forever — and that the abandoned placeholder release never
+  went active (`GET /variants/lookup` correctly 404s with "No ClinVar
+  release has been ingested yet"). `ClinVarIngestionFreshnessBreach`
+  re-pointed at `clinvar_ingestion_jobs_total{status="succeeded"}`, a
+  real job-outcome signal — closing backlog #21e's ingestion-side gap
+  (the old expression only proved "an attempt happened", not that any
+  succeeded).
 - observability#7 (chaos/incident-lab scenarios) — 7 concrete scenarios
   defined (ADR 0020 added a 7th for `clinvar-service`), none
   implemented yet.
