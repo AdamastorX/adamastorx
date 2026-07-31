@@ -133,3 +133,13 @@ this ADR makes the one deliberate deviation from that emptyDir precedent.
 - The outbox-pattern gap above is the trigger to revisit dual-write
   consistency, if/when a future issue's correctness requirements
   actually need it — not a reason to build it now.
+- **Closed by ADR 0026 (backlog #16/#53).** The dual-write gap above is no
+  longer open: `WorkItemController` now writes the `work_items` row and an
+  `outbox_events` row in one transaction (`WorkItemOutboxService`), and an
+  independent `OutboxRelay` publishes to Kafka and marks the row
+  published — a Kafka publish failure after a committed save can no
+  longer silently drop the Kafka side. `work_items` itself didn't create
+  the pressure to build this (nothing downstream depended on a specific
+  publish arriving); `watchlist-service`'s guaranteed-notification
+  requirement (backlog #53) did, and the same pattern was retrofitted
+  here rather than diverging into two designs for the same problem class.
