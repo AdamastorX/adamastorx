@@ -6,9 +6,31 @@ threads, and things the next session shouldn't have to re-discover the
 hard way. Prune/rewrite freely as work completes; this file describes
 *current* state, not history (git history is the record of the past).
 
-Last updated: 2026-07-31.
+Last updated: 2026-08-01.
 
 ## Where things stand
+
+**Backlog #57 (continuous profiling) done, live, both open questions
+resolved with real evidence — see ADR 0028.** Pyroscope deployed
+(unprivileged init-container agent injection into `api`/`clinvar-service`,
+not a rebuilt image or a privileged Alloy DaemonSet — ADR 0028's own
+reasoning). One real bug found and fixed post-merge: both init containers
+initially had no `resources` block, which api's/clinvar-service's
+namespace `ResourceQuota`s (memory quota set) reject outright — blocked
+`api`'s entire Rollout with a real `failed quota` until platform#83 added
+explicit small requests/limits. Once fixed: both services confirmed
+pushing real profiles continuously (Pyroscope's own logs show repeated
+`"profile accepted"` for both `service_name=api`/`detected_language=java`
+and `service_name=clinvar-service`/`detected_language=python`). The #35
+incident reproduced live (`api`'s CPU limit temporarily set to `500m`,
+confirmed pegged via `kubectl top`, Argo Rollouts' `progressDeadlineAbort`
+caught it in ~3 minutes same as #46's own precedent) and a real flame
+graph pulled from that exact window — the real answer surprised the
+original hypothesis: self-time is dominated by the JVM's own C2 JIT
+compiler internals (`PhaseChaitin`/`PhaseIdealLoop`, register allocation
+and loop optimization) and class-loading overhead, not application-level
+Hibernate/Flyway/Kafka bootstrap code. Cluster confirmed back to a clean
+state afterward.
 
 **Local dev TLD switched from `.dev` to `.test`, real incident.**
 Every fixed local address (`api`/`grafana`/`prometheus`/`alertmanager`/
