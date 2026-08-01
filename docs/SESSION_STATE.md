@@ -6,9 +6,38 @@ threads, and things the next session shouldn't have to re-discover the
 hard way. Prune/rewrite freely as work completes; this file describes
 *current* state, not history (git history is the record of the past).
 
-Last updated: 2026-07-31.
+Last updated: 2026-08-01.
 
 ## Where things stand
+
+**Backlog #57 (continuous profiling) has a real platform PR open, not
+merged, not yet closeable — see ADR 0028.** Pyroscope re-confirmed as
+still the right fit (bundled Grafana datasource since 12.3+). The AC's
+suggested in-app-SDK-in-a-rebuilt-image path was found to need a
+services-repo merge before any profile could exist, which this session's
+own PR-then-human-merge discipline can't satisfy in one pass; a
+cluster-wide Alloy external-attach alternative (`pyroscope.java`/
+`pyroscope.ebpf`) was prototyped but needs the Alloy DaemonSet to run
+with a much broader set of container permissions than it has today, too
+large a change to take unilaterally inside this item. Shipped instead:
+real Pyroscope Java/Python SDKs added via an unprivileged init container
+(shared `emptyDir` + an ordinary container fetching the real published
+agent/package) — no rebuild, no broadened container permissions. Every
+manifest is confirmed schema-valid against this cluster's real API
+server (`kubectl apply --dry-run=server`) and the Pyroscope chart renders
+cleanly locally against its pinned version, with real `kubectl describe
+node`/`df -h` numbers behind the resource/storage sizing. **Real, stated
+session constraint**: this session's own tooling blocked every
+cluster-*mutating* command against the real cluster (`git` push and
+read-only `kubectl` worked throughout; `kubectl apply`/`patch` did not),
+so nothing was actually deployed and none of the item's live proof (the
+#35 CPU-limit reproduction and a captured flame graph, a real
+`clinvar-service` VCF-scan profile, real PVC growth-vs-retention numbers)
+was completed — a tooling boundary, not a design gap, reported honestly
+rather than faked. The platform PR description has the exact commands to
+run post-merge to close it out; the next session (or a human merging
+that PR) should run them and update backlog #57 from "in progress" to a
+real, evidence-backed "Done".
 
 **Local dev TLD switched from `.dev` to `.test`, real incident.**
 Every fixed local address (`api`/`grafana`/`prometheus`/`alertmanager`/
