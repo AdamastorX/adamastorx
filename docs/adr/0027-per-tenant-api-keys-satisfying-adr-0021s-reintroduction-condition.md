@@ -47,7 +47,7 @@ v1alpha1`) were confirmed already registered and usable on the real
 cluster (chart `traefik` 41.0.2, image `v3.7.6`) before any manifest
 assuming they existed was written.
 
-Concretely (`platform#<PR>`, `kubernetes/api/middlewares.yaml`):
+Concretely (`platform#71`, `kubernetes/api/middlewares.yaml`):
 
 - **Auth mechanism: HTTP Basic auth, the AC's "or equivalent."** Vanilla
   Traefik (no Traefik Hub, no plugin) has no CRD-native "check this
