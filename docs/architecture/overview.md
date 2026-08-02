@@ -1,19 +1,15 @@
 # Architecture overview
 
-Status: M0-M3 and M5 complete/verified live; M4 Reliability under way
-(ADR 0020) — real histogram/consumer-lag/`clinvar-service` metrics,
-SLO-backed alert rules, and Alertmanager are live; runbooks and chaos
-scenarios are not yet. M5 Clinical Variant Annotation is live:
-`clinvar-service` (Python, ADR 0019) ingests real ClinVar data and
-answers lookups through `api`, proven end to end against the live
-cluster (`rs80357906` → BRCA1, "Pathogenic"). **A simplification pass
-(ADR 0021) removed `gateway` and `whoami` entirely** — both carried
-real infrastructure (a Spring Boot module, CI pipeline, namespace,
-ArgoCD Application, Ingress, TLS cert each) while doing no real work
-(`gateway` forwarded exactly one placeholder route; `whoami` was a
-one-time Traefik+TLS proof, superseded once `api` got its own real
-Ingress). The diagram below shows the current shape, with a note
-underneath marking what exists today; it is the map, not the
+Status: M0-M5 complete/verified live. The expansion phase (ADR 0022)
+followed, and its work has landed unevenly across milestones rather than
+one at a time — M6's progressive delivery and M8's guaranteed-fan-out/
+async-job-control-plane items are done and live, M9's continuous profiling
+is done and live, M10's autoscaling is done and live, and M7's multi-node/
+Cilium/Istio substrate plus M11's SRE agent, M12's reopened bioinformatics
+milestone, and M13's market-sentiment pipeline are all real, ADR-recorded
+decisions (0023-0029) that are **not yet built** — gated on a hardware
+move this project hasn't made. The diagram below shows the current shape,
+with a note underneath marking what exists today; it is the map, not the
 territory.
 
 ## Shape of the system
@@ -32,18 +28,37 @@ territory.
                       │    watches `platform`)   │
                       └────────────┬─────────────┘
                                    ▼
-┌─────────────────────────── k3s cluster ───────────────────────────┐
-│                                                                     │
-│  Traefik (ingress) ─────────────▶ API ─┬─▶ PostgreSQL               │
-│  cert-manager (TLS)                    ├─▶ Redis                   │
-│                                        ├─▶ Kafka (KRaft) ─▶ Workers │
-│                                        └─▶ clinvar-service (Python) │
-│                                             ├─▶ its own PostgreSQL  │
-│                                             └─▶ ClinVar VCF (PVC)   │
-│                                                                     │
-│  OTel Collector, Prometheus + Alertmanager, Loki, Tempo ─▶ Grafana  │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────── k3s cluster ──────────────────────────────┐
+│                                                                          │
+│  Traefik (ingress) ── CORS → API-key auth → rate limit ──▶ API Rollout  │
+│  cert-manager (TLS)   (middleware chain, ADR 0027)          (canary,    │
+│                                                               ADR/#46)  │
+│                                        ├─▶ PostgreSQL (+ outbox table)  │
+│                                        ├─▶ Redis                       │
+│                                        ├─▶ Kafka (KRaft) ─▶ Workers    │
+│                                        │      (KEDA-scaled on lag,     │
+│                                        │       native kafka scaler)    │
+│                                        └─▶ clinvar-service (Python)    │
+│                                             ├─▶ its own PostgreSQL     │
+│                                             │   (async ingestion job   │
+│                                             │    state, #54)           │
+│                                             └─▶ ClinVar VCF (PVC)      │
+│                                                    │                    │
+│                              clinvar.ingestion.completed                │
+│                                                    ▼                    │
+│                                        watchlist-service               │
+│                                        (own namespace/Postgres,        │
+│                                         outbox-table-plus-relay,       │
+│                                         ADR 0026) ─▶ ntfy.sh            │
+│                                                                          │
+│  clinvar-viewer (static IGV.js widget) ─┐                              │
+│  workload-generator (shaped synthetic   ┤─▶ public Ingress, keyed      │
+│    demand, permanent) ──────────────────┘                              │
+│                                                                          │
+│  OTel Collector, Prometheus + Alertmanager, Loki, Tempo,                │
+│  Pyroscope (continuous profiling) ─▶ Grafana                           │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Live today:** GitHub as source of truth; a single-node k3s v1.36.2 cluster
@@ -51,145 +66,236 @@ territory.
 (app-of-apps over the `platform` repo's `argocd/apps/`, prune + selfHeal);
 Traefik 41.0.2 on hostPort 80/443; and cert-manager v1.21.0 with a local CA
 chain (`selfsigned` → `adamastorx-ca` ClusterIssuer — Let's Encrypt deferred
-until a host with public DNS). The `services` repo's CI builds and
-Trivy-scans every PR image as a required merge gate — a fixable
-CRITICAL/HIGH CVE in a base image blocks the merge, as already happened
-once. The API service (Maven module in `services`, Spring Boot/webmvc/
-actuator) is built, published to GHCR, and deployed in-cluster in its
-own namespace (manifests in `platform/kubernetes/api/` +
-`argocd/apps/api.yaml`) — **with its own public Ingress and TLS
-certificate** (`api.local.adamastorx.test`, ADR 0021), the live
-Traefik+TLS+service path. This replaces an earlier design (ADR 0010)
-where a separate `gateway` service forwarded to `api`: `gateway` never
-grew past one placeholder route and was removed entirely (ADR 0021),
-along with `whoami`, the original one-time Traefik+TLS proof app.
-`workers` (services#3) is deployed the
-same way — its own module, its own namespace, no Service (it has no
-business HTTP API, ADR 0011) — consuming from a single-broker Kafka
-(KRaft, combined controller+broker mode) deployed as a Helm-chart ArgoCD
-Application in its own `kafka` namespace, ClusterIP only. `api` publishes
-to the `work-items` topic (3 partitions, RF 1) on `POST /work-items`;
-`workers` consumes and logs it — the async produce→consume path and
-multi-replica consumer-group rebalance are both proven against this real
-cluster, not just unit tests. `api` also persists to PostgreSQL
-(services#4, ADR 0012): `POST /work-items` writes a row via Spring Data
-JPA before publishing to Kafka, `GET /work-items` reads it back. Schema
-is a Flyway migration (versioned, repeatable). Postgres runs as a
-single-instance Bitnami chart deployed into `api`'s own namespace rather
-than a separate one — it has exactly one consumer, unlike Kafka's two,
-and its generated credentials Secret can't be read across namespaces —
-with a real PVC (2Gi, k3s's `local-path` StorageClass), the first
-genuinely persistent storage in this cluster (Kafka's topic data is
-deliberately ephemeral, ADR 0011).
+until a host with public DNS, ADR 0004). Local hostnames are all
+`*.local.adamastorx.test` (switched from `.dev`, which turned out to be an
+HSTS-preloaded TLD with no manual override for an untrusted cert — a real
+incident found live, recorded in `docs/SESSION_STATE.md`). The `services`
+repo's CI builds and Trivy-scans every PR image as a required merge gate.
 
-**Known gap:** the Postgres write and the Kafka publish are two separate
-operations with no compensating logic — a publish failure after a
-successful save leaves a work item persisted but never handed to
-`workers`. Flagged in ADR 0012, tracked as services#16 (transactional
-outbox / idempotent consumer), not fixed speculatively.
+**`api`** (Maven module in `services`, Spring Boot/webmvc/actuator) is no
+longer a plain Kubernetes `Deployment`: it is an Argo Rollouts **`Rollout`**
+with a canary strategy, gated by an `AnalysisTemplate` that queries the
+live Prometheus for the service's own SLIs (non-5xx rate, p95 latency —
+the same expressions `alerting_rules.yml` already defines, backlog #46,
+Done) and aborts automatically on breach. This closes a real incident: a
+routine rollout once sat in `CrashLoopBackOff` for 95 minutes while the old
+pod kept serving traffic, because a plain `Deployment`'s rolling update
+leaves the old ReplicaSet up with nothing visibly "down" to alert on. Both
+directions are proven live against the real cluster — clean promotion in
+under 3 minutes, and automatic abort reproducing that exact 95-minute
+CrashLoopBackOff shape in ~3 minutes with the previous pod undisturbed.
+`api` still has its own public Ingress and TLS certificate
+(`api.local.adamastorx.test`, ADR 0021) — the earlier `gateway`/`whoami`
+services this replaced are gone entirely, not paused.
 
-`api` also fronts `GET /work-items/{id}` with a Redis cache-aside layer
-(services#5, ADR 0016): a hand-rolled `RedisTemplate`-based service
-(not `@Cacheable` — Boot has no Redis cache-metrics binder), hit/miss/
-error counters on `/actuator/prometheus`, fail-open to PostgreSQL on a
-Redis outage (tested in CI by stopping the Testcontainers Redis
-mid-test, confirmed against the live cluster too: a real
-`GET`/`GET` round-trip produced one `miss` then one `hit`, zero
-errors). Redis (Bitnami chart, standalone architecture, no PVC — cache-
-aside means Postgres stays the only source of truth) lives in `api`'s
-namespace, not its own, same reasoning ADR 0012 used for Postgres
-(single consumer, real credential, `secretKeyRef` can't cross
-namespaces). No invalidation-on-write is demonstrated here, on
-purpose and stated plainly: `work_items` rows are immutable post-
-creation, so there's nothing to invalidate against — any expiry here
-is TTL-only hygiene, not a correctness mechanism.
+**`api`'s public Ingress now sits behind a real Traefik middleware
+chain** (ADR 0027, backlog #56, Done): `api-cors` → `api-key-auth` →
+`api-key-ratelimit` (`kubernetes/api/middlewares.yaml`). HTTP Basic auth
+is the API-key mechanism — one `tenant:apr1-hash` htpasswd line per
+caller, tenant name as username, key as password — backed by a real
+Kubernetes Secret provisioned out-of-band by
+`bootstrap/create-stateful-secrets.sh`, never committed to git. Per-key
+rate limiting is Traefik's native `rateLimit` middleware keyed on the
+`Authorization` header (5 req/s average, burst 10). A `headers`
+middleware answers a browser's CORS `OPTIONS` preflight before auth ever
+runs — the real gotcha a naive ordering would have broken `clinvar-viewer`
+on. Proven live in both directions repeatedly: unauthenticated → `401`;
+a real tenant key → `200`/`202`; a real request burst → a real mix of
+`200`/`429`. This satisfies the reintroduction condition ADR 0021 itself
+left open when `gateway` was removed ("reintroducing an edge service — or
+using Traefik middleware, is a deliberate future decision") — no new
+service was added.
 
-**Observability (M3, extended by M4):** `api`/`workers` export traces via
-Micrometer Tracing + OTLP to an OpenTelemetry Collector (observability#1,
-ADR 0013) deployed as an ArgoCD Application in its own `otel` namespace —
-a real trace ID correlates `api`→Kafka→`workers` (message hop; the
-original `gateway`→`api` HTTP hop this was first proven against no
-longer exists, ADR 0021), proven in live application logs. Traces land
-in Tempo (single-binary chart, own `tempo` namespace, 72h retention, 2Gi
-PVC — observability#3, ADR 0015), the Collector's traces pipeline
-exporting `otlp/tempo` in place of ADR 0013's `debug` placeholder.
-Metrics flow the existing Boot actuator way: `api`/`workers` expose
-`/actuator/prometheus`, `clinvar-service` exposes `GET /metrics`
-(`prometheus_client`, backlog #21a), scraped by a plain
-`prometheus-community/prometheus` chart (own `prometheus` namespace, no
-Operator, 3-day retention, 2Gi PVC — observability#2, ADR 0014); `api`/
-`clinvar-service` via static targets, `workers` via Kubernetes pod-role
-service discovery (it has no Service, ADR 0009/0011), plus the
-Collector's own self-monitoring metrics. Logs are shipped by Alloy (a
-DaemonSet, own `alloy` namespace, explicit River pipeline reading pod
-logs via the Kubernetes API — no hostPath mount) into Loki
-(`Monolithic` mode, filesystem storage, own `loki` namespace, 72h
-retention, 2Gi PVC). Grafana (own `grafana` namespace, no PVC, charts
-sourced from `grafana-community/helm-charts` since the original
-`grafana/helm-charts` repo is deprecated) has Prometheus, Loki, and
-Tempo pre-provisioned as datasources, with the Loki↔Tempo trace/log
-pivot wired via `derivedFields`/`tracesToLogsV2` — proven end to end
-with a real request's trace ID appearing in both. No metric→trace
-exemplar pivot yet (backlog #19a). Grafana has one golden-signal
-dashboard per service (`api`/`workers`, backlog #20, ADR 0017;
-`clinvar-service`'s own signals tracked separately, backlog #29),
-provisioned as code (`platform/argocd/apps/grafana.yaml`'s
-`dashboardProviders`/`dashboards` values, file-based, no sidecar).
-Real latency percentiles and a real Kafka consumer-lag metric (both
-originally stated as known gaps) shipped under backlog #21a and are
-plotted on the dashboards today, not the earlier average/max/thread-pool
-stand-ins. **M4** (ADR 0020) built on this: Alertmanager is live with one
-real notification channel (an `ntfy.sh` webhook, backlog #21c) and seven
-SLO-backed alert rules (backlog #21), verified firing into real
-Prometheus/Alertmanager state. Runbooks (#22) and the trimmed 3-scenario
-chaos plan (#23, ADR 0021/S6) are not yet built.
+`api` also persists to PostgreSQL (ADR 0012) — but **the original dual-write
+gap is closed**: `POST /work-items` no longer calls `KafkaTemplate.send()`
+directly. `WorkItemOutboxService` persists the `work_items` row and an
+`outbox_events` row in one transaction; an independent `OutboxRelay`
+poll loop publishes to Kafka and marks the row published (outbox-table-
+plus-relay, ADR 0026, closing backlog #16). `GET /work-items` still reads
+the row back; Postgres runs as a single-instance Bitnami chart in `api`'s
+own namespace with a real PVC (2Gi, `local-path`). `api` also fronts
+`GET /work-items/{id}` with the existing Redis cache-aside layer (ADR
+0016), fail-open to PostgreSQL on a Redis outage.
+
+**`workers`** (services#3) still has no Service (no business HTTP API,
+ADR 0011) and consumes `work-items` from the single-broker Kafka (KRaft,
+combined mode, `kafka` namespace) — but it is no longer a fixed-replica
+`Deployment`. **KEDA (2.20.2) scales `workers` on real Kafka consumer-group
+lag** via its native `kafka` scaler (backlog #63, Done) — querying the
+broker's own committed offsets directly, not a Prometheus-backed trigger,
+which structurally sidesteps a real gap found live (backlog #76: the lag
+metric is self-reported by the consumer's own JVM and goes dark exactly
+when the consumer is fully stopped). KEDA reacts at `lagThreshold: 50`,
+an order of magnitude below the `WorkersConsumerLagHigh` alert's `500`/
+`10m`, which stays as the backstop for when autoscaling alone can't fix
+it. Scale-to-zero is evaluated and deliberately **not** used
+(`minReplicaCount: 1`) — there's no `kube-state-metrics` on this cluster
+to distinguish an intentional KEDA scale-to-zero from a real stuck
+consumer for the `WorkersConsumerMissing` alert (backlog #76), a stated
+follow-up rather than something shipped broken. Proven live: a real
+~2,600-request burst drove lag to 150, KEDA correctly computed and
+requested 3 replicas (only 1 actually scheduled — see the CPU-headroom
+note below), and the running replica alone drained the backlog to zero
+lag within ~90s.
+
+**Known gap:** Kafka's own memory limit was raised 768Mi→1536Mi
+(backlog #75) after a real, timestamp-aligned OOMKill during a consumer-
+lag chaos scenario, but the root cause (accumulating unconsumed backlog
+vs. a temporarily-elevated test traffic rate) was not cleanly isolated —
+recorded honestly as a real, still-open question rather than a closed
+one. This node's CPU, not memory, was separately found to be the scarce
+resource: `kubectl describe node` showed CPU requested at 99% of
+allocatable at multiple points blocking real, unrelated work three
+separate times (backlog #77, Done) — CPU *requests* on the over-
+provisioned Postgres/Redis instances were trimmed to real observed usage,
+recovering the node to 63% requested (2545m/4000m, ~1.4 free cores). This
+headroom is real but finite, and is the stated reason M13 (below) is
+gated on the M7 hardware move rather than squeezed onto this node.
+
+**Observability (four pillars):** `api`/`workers` export traces via
+Micrometer Tracing + OTLP to an OpenTelemetry Collector (ADR 0013) into
+Tempo (72h retention, 2Gi PVC). Metrics flow via Boot actuator/
+`prometheus_client` into a plain Prometheus chart (3-day retention, 2Gi
+PVC), scraped from `api`/`clinvar-service` (static targets) and `workers`
+(pod-role service discovery). Logs are shipped by Alloy into Loki
+(72h retention, 2Gi PVC). Grafana has Prometheus/Loki/Tempo pre-wired
+with the trace/log pivot, golden-signal dashboards per service, and real
+latency percentiles plus a real Kafka consumer-lag metric (backlog
+#21a). Alertmanager is live with an `ntfy.sh` notification channel and
+SLO-backed alert rules — re-validated for real under sustained traffic
+(backlog #47, Done): the same two rules that didn't fire in the original
+chaos scenarios both fired unaided once #45's continuous traffic existed,
+falsifying the "traffic volume, not the rules" hypothesis in the
+direction it predicted.
+
+**Pyroscope is now this stack's fourth observability pillar — continuous
+profiling** (backlog #57, ADR 0028, Done). `api` (Java) and
+`clinvar-service` (Python) are both instrumented via an unprivileged
+**init-container agent-injection pattern**: an ordinary, non-root init
+container fetches the real published Pyroscope SDK into a shared
+`emptyDir`, and the main container picks it up with no image rebuild
+(`JAVA_TOOL_OPTIONS=-javaagent:...` for `api`; a `command` override
+wrapping `uvicorn` for `clinvar-service`) — deliberately not the
+alternative of a privileged, cluster-wide Alloy DaemonSet running as
+root in the host PID namespace, which ADR 0028 declined to adopt
+unilaterally inside one item's scope. Both services confirmed pushing
+real, continuous profiles against the live cluster. The #35
+CrashLoopBackOff incident was deliberately reproduced and profiled for
+real, and the real flame graph **did not confirm the original
+hypothesis**: self-time was dominated by the JVM's own C2 JIT compiler
+internals and class-loading overhead, not application-level Hibernate/
+Flyway/Kafka bootstrap code as originally assumed — recorded honestly.
+Profile-to-trace span correlation is a stated, unshipped gap: it needs a
+language-specific OTel bridge package wired into each service's own code,
+not something an init-container can retrofit.
 
 **M5 Clinical Variant Annotation:** `clinvar-service` (own `clinvar`
-namespace, ADR 0019) is this project's first non-JVM component —
-FastAPI + `pysam` + `psycopg` + `confluent-kafka`, built specifically
-because the domain (real ClinVar VCF/tabix data, real bioinformatics
-libraries) justified it, not a wholesale language migration. It owns
-ClinVar end to end: a weekly (and admin-triggerable, `POST
-/internal/clinvar/ingest`) download from NCBI, a real pysam tabix
-rebuild (NCBI's published `.tbi.md5` checksum sidecar turned out not to
-exist at the documented URL — a real discrepancy found live, not in
-any doc — so validation always falls through to the rebuild path), a
-dedicated Postgres instance (its own namespace, its own generated
-credential — ADR 0019 exists specifically because a shared Postgres
-Secret and a shared PVC both turned out not to be able to cross the
-`api`/`workers` namespace boundary, two real bugs that drove this
-redesign), and a `clinvar_variant_index` table for rsID lookups. `api`
-holds no ClinVar file or DB access at all; it calls `clinvar-service`
-over HTTP (`ClinVarServiceClient`, Spring `RestClient`, the same
-service-to-service HTTP pattern ADR 0010 originally established for
-`gateway`→`api`, before `gateway` was removed entirely — ADR 0021) and
-fronts the result with the Redis
-cache-aside layer from ADR 0016, invalidated on write via a Kafka event
-(`clinvar.ingestion.completed`) carrying the specific cache keys a new
-release actually changed — this project's first skewed-access,
-invalidate-on-write cache pattern, as opposed to `work-items`' pure
-TTL hygiene. Proven end to end against the real cluster: a real
-ingestion run (4,453,798 VCF records, 2,895,514 rsID-indexed rows) and
-a real `GET /variants/lookup?rsid=rs80357906` through `api` returning
-BRCA1's real ClinVar classification, `"Pathogenic"`. **Known gap:** the
-ingestion endpoint runs synchronously for several minutes; a
-concurrency guard (services#36) now rejects a second overlapping
-trigger (409) after two overlapping manual triggers once ran two full
-VCF scans side by side and took the pod down, but the endpoint itself
-is still blocking rather than fire-and-poll.
+namespace, ADR 0019) remains this project's only non-JVM component —
+FastAPI + `pysam` + `psycopg` + `confluent-kafka`. It owns ClinVar end to
+end: weekly download from NCBI, a pysam tabix rebuild, a dedicated
+Postgres instance, and a `clinvar_variant_index` table for rsID lookups.
+`api` calls it over HTTP (`ClinVarServiceClient`) and fronts the result
+with Redis cache-aside, invalidated on write via `clinvar.ingestion.
+completed`. **The ingestion trigger is no longer synchronous-blocking**:
+`POST /internal/clinvar/ingest` returns `202` with a job id in ~51ms
+(measured); job state — `queued`/`running`/`succeeded`/`failed`/
+`cancelled` — is persisted in `clinvar-service`'s own Postgres, not in
+memory, so it survives a pod restart (backlog #54, Done). Proven live: a
+real ingestion force-killed mid-run reconciled to `failed` with an
+explicit reason on the replacement pod's startup, with no abandoned
+release ever going active; a second real ingestion was cancelled
+mid-scan and confirmed to actually stop, not just relabel. The old
+`threading.Lock` concurrency guard (services#36) was retired in favor of
+a Postgres partial unique index, which — unlike the Lock — survives a
+restart. `GET /variants/lookup?rsid=rs80357906` still returns BRCA1's
+real ClinVar classification, `"Pathogenic"`, proven against a real
+ingestion of 4,453,798 VCF records.
 
-**Not yet:** Mimir (long-term/multi-tenant metrics storage,
-backlog #18a, a separate experiment not required for the single-node
-Prometheus already live); runbooks (#22) and the 3-scenario chaos plan
-(#23); `ClinVarInvalidationLag` alert and release-ID trace propagation
-for `clinvar-service` (observability#13/#14, re-scoping against ADR
-0019's actual Python architecture, not yet started).
+**`watchlist-service`** (backlog #53, ADR 0026, Done) is a new component:
+its own namespace, its own Postgres, its own ArgoCD Applications. It owns
+subscription CRUD and **guaranteed, idempotent, exactly-once-eventually
+fan-out delivery** on `clinvar.ingestion.completed` — a second,
+independent Kafka consumer group from `api`'s cache-invalidation listener
+on the same topic. The delivery mechanism is outbox-table-plus-relay: a
+`ClinVarIngestionListener` resolves matching subscriptions and inserts
+`PENDING` rows into a `deliveries` table in the same transaction as the
+Kafka offset acknowledgment; a fully independent `NotificationRelay` poll
+loop actually calls `ntfy.sh` and marks rows `SENT`, with a `UNIQUE`
+constraint plus `ON CONFLICT DO NOTHING` making redelivery idempotent,
+and per-subscriber dead-lettering so one permanently-broken subscriber
+never blocks another's fan-out. The crash-mid-delivery acceptance
+criterion — the reason this pattern was chosen over an inline idempotent-
+consumer-plus-retry design — was proven live against the real cluster: a
+pod force-killed between a delivery row being persisted and the relay's
+next tick left the row durably `PENDING`, and it was delivered on restart,
+confirmed independently via the real ntfy.sh message history. **Known,
+stated gap**: a crash between a row being claimed and the notification
+call completing leaves that one row stuck in a `SENDING` state with
+nothing to reclaim it — a real, valuable follow-on (a stuck-`SENDING`
+reaper), not built here. Gene-based subscriptions are schema-ready but
+unresolved: no component in this project extracts a gene symbol from
+ClinVar's data today.
+
+**`clinvar-viewer`** (an IGV.js genome-browser widget) and
+**`workload-generator`** (a permanent, shaped synthetic-traffic generator,
+backlog #45, Done) are both real, live components, not test fixtures.
+`clinvar-viewer` is a static page with no backend of its own — a
+deploy-time-mounted `config.js` carries its API key, stated plainly in
+three places as *not* a confidentiality boundary, since a static page
+can't keep anything out of view-source. `workload-generator` drives all
+three real request paths (`work-items`, `/variants/lookup` against a
+skewed key distribution, a configurable error fraction) continuously on
+a shaped, non-flat rate, and reaches `api` via the public Ingress
+hostname specifically so its own traffic is subject to the same edge
+auth/rate-limit enforcement as everything else. Both carry their own
+per-tenant API key via the same out-of-band Secret mechanism.
+
+**Not yet:** the expansion phase's remaining milestones are real,
+ADR-recorded decisions that have **not been built**, not silent gaps —
+each is gated on a dedicated-desktop hardware move (M7) this project
+hasn't made yet:
+
+- **M7 Multi-Node Substrate**: a multi-node k3s rebuild, **Cilium**
+  replacing flannel with Hubble flow observability (ADR 0023) and the
+  project's first NetworkPolicies, an **Istio ambient mesh** layered on
+  afterward for mTLS and traffic-control/circuit-breaking (ADR 0024),
+  replicated storage, and node-drain/rolling-upgrade exercises. Backlog
+  #23a (backup/restore) is a hard prerequisite and is itself still open.
+  **Neither Cilium nor Istio is deployed anywhere in this cluster today**
+  — both remain on `.claude/PROJECT.md`'s approved list only via their
+  respective ADRs, not as running components.
+- **M11 AI-Assisted SRE** — an `sre-agent` over the project's own
+  telemetry; not started.
+- **M12 Bioinformatics Workloads (reopened, ADR 0025)** — `metadata-
+  service`, MinIO, a real Nextflow pipeline engine, a saga-shaped Kafka
+  lifecycle, `notification-service`, real licensed public datasets
+  (1000 Genomes/TCGA/GEO/TCIA); gated on M7's storage substrate. None of
+  its services (#67-#72) exist yet.
+- **M13 Real-Time Market Sentiment Pipeline (ADR 0029)** — five new
+  Kafka-backed services (`market-data-ingestor`, `news-ingestor`,
+  `sentiment-analyzer`, `aggregator`, `visualizer`) for real, external,
+  always-flowing stock-price and financial-news sentiment data. Gated on
+  M7 for CPU headroom specifically (backlog #77's real accounting), not
+  data volume. **None of these services exist yet** — a reader should not
+  be surprised to find this milestone with zero running components.
+- Admission-time policy enforcement (Kyverno/Gatekeeper, backlog #58),
+  Chaos Mesh formalizing the existing manual chaos exercises (#64), and
+  Kubecost cost visibility priced against real owned-hardware TCO (#65)
+  are also not yet built.
+- Incident-response runbooks (#22) are partial — `docs/runbooks/` has
+  the canary promote/abort runbook (#46) and the cross-repo rollout
+  runbook, not yet one per alert rule as #22's own AC asks.
+- Mimir (long-term/multi-tenant metrics storage, backlog #18a) remains a
+  separate experiment not required for the single-node Prometheus
+  already live.
 
 ## Boundaries
 
 - **platform** owns everything below the application: cluster, ingress, TLS,
   GitOps delivery, CI pipeline definitions.
-- **services** owns the application: API, workers, `clinvar-service`, shared libraries.
+- **services** owns the application: API, workers, `clinvar-service`,
+  `watchlist-service`, `clinvar-viewer`, `workload-generator`, shared
+  libraries.
 - **observability** owns what you look at when something breaks: dashboards,
   alerts, runbooks, OTel config. Kept separate from `platform` deliberately —
   different change cadence and different owners in a real org (SRE vs.
