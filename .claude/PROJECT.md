@@ -50,35 +50,48 @@ Approved: Kubernetes (k3s), Terraform, Helm, ArgoCD, GitHub Actions, Kafka
 Mimir, Traefik, cert-manager, Trivy, Spring Boot.
 
 Explicitly excluded — do not introduce without an ADR overturning this:
-service mesh, Vault, Crossplane, Backstage, Cilium. The platform stays
-intentionally small.
+Vault, Crossplane, Backstage. The platform stays intentionally small.
+Cilium and service mesh were both on this list originally; both were
+overturned (ADR 0023, ADR 0024 respectively) and removed from it — neither
+is deployed yet (both are M7, not yet built, see "Current milestone"
+above), but the exclusion itself no longer applies to either.
 
 ## Current milestone
 
-**M4 Reliability** in progress (M0-M3 and M5 complete/verified live).
-M2 Distributed Application: done — API, workers wired to Kafka
-(ADR 0011), PostgreSQL (ADR 0012), and Redis cache-aside (services#5, ADR
-0016). M3 Observability: done — OTel tracing (ADR 0013), Prometheus/Grafana
-(ADR 0014), Loki/Tempo/Alloy (ADR 0015), golden-signal dashboards (ADR
-0017), all proven against the real cluster. M5 Clinical Variant Annotation:
-done — `clinvar-service` (Python/FastAPI, ADR 0019, superseding ADR 0018's
-original in-Java design after two real cross-namespace bugs) verified live
-end to end (`rs80357906` → BRCA1, `"Pathogenic"`); gnomAD enrichment was
-cut (ADR 0021), ClinVar is the sole annotation source. M4 Reliability
-(ADR 0020) is now the active milestone: real histogram/consumer-lag/
-`clinvar-service` metrics (backlog #21a) shipped, and SLOs/alerting
-(#21) plus Alertmanager's ntfy.sh receiver (#21c) followed — seven alert
-rules verified firing against real Prometheus/Alertmanager state.
-Runbooks (#22) and a 3-scenario chaos plan (#23, trimmed from seven by
-ADR 0021/S6) remain ahead. **Simplification pass (ADR 0021)**: `gateway`
-and `whoami` removed entirely (`api` now has its own Ingress+TLS);
-gnomAD, M6 (backlog #30), HGVS/liftover (#40/#41), and several
-over-scoped M4 items (#21b, #33, #34, #23b merged into #23a) were cut
-as complexity that didn't earn its keep for this project's stated
-SRE/platform portfolio goal.
-See `docs/roadmap/milestones.md` and `docs/SESSION_STATE.md` for exactly
-what's in flight right now — this section is a point-in-time summary, that
-file is the current source of truth.
+M0-M5 are complete/verified live. **M4 Reliability** itself is not fully
+closed — runbooks (#22) are partial and backup/restore (#23a) is still
+open — but per `docs/roadmap/milestones.md`'s own rule (an item starts
+when its own dependencies clear, not when the whole previous milestone
+closes), real work from the expansion phase that followed (ADR 0022) has
+already landed in parallel and is live today: **M6** progressive delivery
+(`api` is an Argo Rollouts canary with an automated SLO-analysis gate,
+backlog #46) and the continuous workload generator (#45); **M8**
+`watchlist-service`'s guaranteed outbox-plus-relay fan-out (#53, ADR 0026)
+and `clinvar-service`'s async ClinVar-ingestion job control plane (#54);
+**M9** continuous profiling via Pyroscope (#57, ADR 0028); and **M10**
+KEDA autoscaling `workers` on real Kafka consumer lag (#63). Per-tenant
+API keys and rate limiting at the edge (#56, ADR 0027) also shipped,
+satisfying the reintroduction condition ADR 0021 left open when `gateway`
+was removed.
+
+**Not yet built**: M7's multi-node substrate — Cilium (ADR 0023) and an
+Istio ambient mesh (ADR 0024) are approved decisions, not running
+components — gates M11 (`sre-agent`), the reopened M12 bioinformatics
+milestone (ADR 0025), and M13's real-time market-sentiment pipeline
+(ADR 0029), none of which have started; all three are recorded here so a
+reader isn't surprised to find approved ADRs with zero live infrastructure
+behind them yet. **Simplification pass (ADR 0021)**: `gateway` and
+`whoami` were removed entirely; gnomAD, HGVS/liftover (#40/#41), and
+several over-scoped M4 items were cut — upheld by ADR 0022, except that
+M6 (the closed batch/bioinformatics reservation, backlog #30) was
+deliberately reopened under a new milestone number, M12, once the
+project's own stated goal changed (ADR 0022/0025) — not silently
+reversed.
+
+See `docs/architecture/overview.md` for the detailed real/live-vs-not-yet
+breakdown, `docs/roadmap/milestones.md` and `docs/SESSION_STATE.md` for
+exactly what's in flight right now — this section is a point-in-time
+summary, those files are the current source of truth.
 
 ## Repository map
 
