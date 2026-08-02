@@ -664,6 +664,12 @@ be picked up whenever.
 - Dependencies: none.
 - Priority: P2. Labels: `documentation`.
 
+**83. `docs/architecture/overview.md` is stale again — the exact drift #32 already named, recurring**
+- Purpose: found live during a staff-engineer review, 2026-08-02. The file's "Live today" section still describes the shape as of M5 — no `watchlist-service` (#53), no async job control plane (#54), no per-tenant API keys/rate limiting at the edge (#56), no Argo Rollouts canary (#46), no KEDA autoscaling (#63), no Pyroscope/continuous profiling (#57), no chaos-scenario findings, no M13. This is real evidence that #32's own fix (a checkable trigger in the PR checklist) has not actually stuck — the same drift it was written to catch happened again, on the same file it explicitly named as one to watch. Recorded honestly rather than silently re-fixed and left to recur a third time.
+- Acceptance Criteria: `docs/architecture/overview.md` rewritten to describe the real, current, live shape of the system — every component listed in this document's own audit is current: `api` as an Argo Rollouts `Rollout` (not a plain Deployment), `workers` autoscaled by KEDA, the API-key/rate-limit middleware chain on the public Ingress, `watchlist-service`'s outbox-plus-relay pattern, `clinvar-service`'s async job control plane, Pyroscope as the fourth observability pillar, and M13's existence (even while gated on M7, so a reader isn't surprised by a milestone with no running components yet). Separately and just as important: #32's own trigger mechanism is checked for real — confirm whether the PR-checklist trigger it describes actually exists in `CONTRIBUTING.md` today, and if it doesn't (or exists but isn't being followed), that gap is named explicitly here rather than assumed fixed because #32 says "Done" elsewhere.
+- Dependencies: none.
+- Priority: P1. Labels: `documentation`.
+
 ---
 
 ## Simplification
