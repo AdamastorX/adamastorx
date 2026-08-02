@@ -24,6 +24,7 @@ state.
 | **M10 Platform Automation: Elastic Scaling, Chaos, and Cost** | KEDA event-driven autoscaling on Kafka lag, Chaos Mesh formalizing the manual chaos exercises, and Kubecost cost visibility — capabilities that earn their keep once load is real and workloads are diverse. |
 | **M11 AI-Assisted SRE** | An `sre-agent` over the project's own Loki/Tempo/Prometheus/events/Alertmanager signals — a real incident-triage agent, evaluated honestly against the human-written fact packs. |
 | **M12 Bioinformatics Workloads (reopened)** | The bio-pipeline milestone ADR 0021 closed, reopened by ADR 0025 for the changed goal — a Metadata API, MinIO, real Nextflow pipelines, a saga-shaped Kafka lifecycle, a Notification service, and real licensed public data. |
+| **M13 Real-Time Market Sentiment Pipeline** | Real, continuously-flowing external market data — live stock prices and financial news sentiment for a fixed watchlist, decomposed into five Kafka-backed services (ADR 0029) — the flagship real-workload demo for the M7 hardware substrate; revives #55's stateful stream processing on a friendlier domain. |
 
 M6–M9 are the expansion phase (ADR 0022). The goal changed — breadth and
 novelty, on top of the tight core ADR 0021 produced — and ADR 0022 states
@@ -58,6 +59,24 @@ the goal shifted (ADR 0022) and health-tech roles make real licensed
 domain data an asset, not the "bio coat of paint" liability it correctly
 was for a tight SRE portfolio. M12 lands after M7's multi-node/replicated-
 storage substrate (#48/#51), which its data volume needs.
+
+**M13 (Real-Time Market Sentiment Pipeline, ADR 0029) also gates on M7,
+for a different real reason than M12.** M12 needs M7's substrate for data
+volume; M13 needs it for CPU headroom. #77's real accounting (closed
+2026-08-02, platform#81) found this single node's CPU allocatable already
+at 63% requested (2545m of 4000m) after every existing over-provisioned
+request in the cluster was trimmed down to real observed usage — roughly
+1.4 real free cores, not enough room for the four to five new always-on
+Kafka producer/consumer services (backlog #78-#82) this milestone adds on
+top of everything M8-M12 already carries. M13 is deliberately scoped as
+the flagship real-workload demo for the dedicated-desktop substrate M7
+builds, not squeezed onto the current laptop ahead of it. Its services
+are ordinary Kafka producers and consumers and so inherit ADR 0011's
+ephemeral-broker-storage constraint the same way #55 already flagged for
+the shape it revives — #81 (the `aggregator`, superseding #55) is where
+that conflict is actually resolved, not deferred a second time. M13 can
+run alongside M8-M11 once M7 lands; nothing in M8-M11 blocks it or is
+blocked by it.
 
 A milestone is Done (Definition of Done, `.claude/PROJECT.md`) when every
 item in it is closed — that gate is unchanged. What's relaxed is only the
