@@ -68,15 +68,18 @@ at 63% requested (2545m of 4000m) after every existing over-provisioned
 request in the cluster was trimmed down to real observed usage — roughly
 1.4 real free cores, not enough room for the four to five new always-on
 Kafka producer/consumer services (backlog #78-#82) this milestone adds on
-top of everything M8-M12 already carries. M13 is deliberately scoped as
-the flagship real-workload demo for the dedicated-desktop substrate M7
-builds, not squeezed onto the current laptop ahead of it. Its services
-are ordinary Kafka producers and consumers and so inherit ADR 0011's
-ephemeral-broker-storage constraint the same way #55 already flagged for
-the shape it revives — #81 (the `aggregator`, superseding #55) is where
-that conflict is actually resolved, not deferred a second time. M13 can
-run alongside M8-M11 once M7 lands; nothing in M8-M11 blocks it or is
-blocked by it.
+top of everything M8-M12 already carries. Its services are ordinary Kafka
+producers and consumers and so inherit ADR 0011's ephemeral-broker-storage
+constraint the same way #55 already flagged for the shape it revives —
+#81 (the `aggregator`, superseding #55) is where that conflict is
+actually resolved, not deferred a second time.
+
+**Gate overridden by the owner, 2026-08-02** — development starts on the
+current laptop, not the M7 substrate. The reasoning above stands (CPU is
+real and finite); the response is incremental live deployment with a
+real headroom check before each service, not disbelief in the constraint.
+See backlog.md's M13 section for the exact stated tradeoff. M13 can run
+alongside M8-M11; nothing in M8-M11 blocks it or is blocked by it.
 
 A milestone is Done (Definition of Done, `.claude/PROJECT.md`) when every
 item in it is closed — that gate is unchanged. What's relaxed is only the
