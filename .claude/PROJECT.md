@@ -85,8 +85,11 @@ laptop, deployed incrementally with a real headroom check before each
 service (`docs/roadmap/backlog.md`'s M13 intro has the full tradeoff).
 `news-ingestor` (#79) is live and verified with real data (real WSJ/
 MarketWatch articles matched and published to `news.article.published`);
-`market-data-ingestor` (#78) is in progress; `sentiment-analyzer` (#80),
-`aggregator` (#81), and `visualizer` (#82) have not started. **Simplification pass (ADR 0021)**: `gateway` and
+`market-data-ingestor` (#78) is live, connected to Finnhub's real
+websocket for all 5 watchlisted tickers (real trade-tick-to-Kafka proof
+pending real US market hours — the mechanism itself is already
+live-verified, see backlog #78); `sentiment-analyzer` (#80), `aggregator`
+(#81), and `visualizer` (#82) have not started. **Simplification pass (ADR 0021)**: `gateway` and
 `whoami` were removed entirely; gnomAD, HGVS/liftover (#40/#41), and
 several over-scoped M4 items were cut — upheld by ADR 0022, except that
 M6 (the closed batch/bioinformatics reservation, backlog #30) was
