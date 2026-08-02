@@ -505,6 +505,26 @@ Check `kubectl get application <name> -n argocd -o jsonpath='{.operation}'`
 before assuming a "keeps reapplying the wrong thing" symptom is a
 caching/chart problem — it might just be a frozen operation.
 
+**A confirmed real trigger for this (2026-08-02, syncing `kafka` to pick
+up backlog #79's new topic): setting `.operation.sync.revision` to
+`"HEAD"` when manually patching a Helm-chart-sourced Application.**
+`"HEAD"` is a git-ism, not a valid value for a Helm chart source's
+revision (which needs a real semver constraint or an empty string to
+fall back to `spec.source.targetRevision`) — the sync fails at manifest
+generation (`ComparisonError: ... invalid revision ... improper
+constraint: HEAD`), but the automatic retry doesn't cleanly re-fail: it
+re-applied a **stale, previously-cached** `operation.sync.source` (an old
+snapshot missing the new topic entirely), actually ran a real sync
+against that stale manifest, and reported per-resource `Succeeded`
+statuses in `status.operationState.syncResult.resources` even though the
+overall `phase` was `Error` — genuinely misleading, easy to mistake for
+a real (if oddly-labeled) success. Confirmed via
+`status.operationState.operation.sync.source.helm.valuesObject` still
+showing the old `provisioning.topics` list post-failure. **Fix: never set
+`revision` in a manual sync patch for a Helm-sourced Application** —
+omit the field entirely (`{"sync":{}}`) so the controller reads the
+live `spec.source.targetRevision` fresh.
+
 ## Namespace-per-component isn't absolute
 
 Established pattern: each service/infra component gets its own
