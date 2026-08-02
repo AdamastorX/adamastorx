@@ -76,11 +76,17 @@ was removed.
 
 **Not yet built**: M7's multi-node substrate — Cilium (ADR 0023) and an
 Istio ambient mesh (ADR 0024) are approved decisions, not running
-components — gates M11 (`sre-agent`), the reopened M12 bioinformatics
-milestone (ADR 0025), and M13's real-time market-sentiment pipeline
-(ADR 0029), none of which have started; all three are recorded here so a
-reader isn't surprised to find approved ADRs with zero live infrastructure
-behind them yet. **Simplification pass (ADR 0021)**: `gateway` and
+components — still gates M11 (`sre-agent`) and the reopened M12
+bioinformatics milestone (ADR 0025), neither of which has started.
+**M13's real-time market-sentiment pipeline (ADR 0029)** was originally
+gated on M7 for CPU-headroom reasons (#77) but the owner explicitly
+overrode that gate 2026-08-02 to start now, on the current single-node
+laptop, deployed incrementally with a real headroom check before each
+service (`docs/roadmap/backlog.md`'s M13 intro has the full tradeoff).
+`news-ingestor` (#79) is built, tested, and merged, real image published,
+being synced to the live cluster now; `market-data-ingestor` (#78) is in
+progress; `sentiment-analyzer` (#80), `aggregator` (#81), and `visualizer`
+(#82) have not started. **Simplification pass (ADR 0021)**: `gateway` and
 `whoami` were removed entirely; gnomAD, HGVS/liftover (#40/#41), and
 several over-scoped M4 items were cut — upheld by ADR 0022, except that
 M6 (the closed batch/bioinformatics reservation, backlog #30) was
