@@ -597,16 +597,28 @@ reopening rationale and how ADR 0021's "bio coat of paint" risk is bounded.
 
 ## M13 Real-Time Market Sentiment Pipeline (ADR 0029)
 
-Gated on M7 (see `docs/roadmap/milestones.md`), for a different real reason
-than M12: not data volume, but CPU headroom. #77's real accounting (closed
-2026-08-02, platform#81) found this single node already at 63% of
-allocatable CPU requested (2545m/4000m) after every existing over-
-provisioned request in the cluster was trimmed to real observed usage —
-roughly 1.4 real free cores, not enough room for the four to five new
-always-on Kafka producer/consumer services below on top of everything
-M8-M12 already adds. This is the flagship real-workload demo for the M7
-dedicated-hardware substrate, not something squeezed onto the current
-laptop ahead of it. See ADR 0029 for the domain choice (real, external,
+**M7 gate overridden by the owner, 2026-08-02 — deliberate, not silent.**
+The gating reasoning below is unchanged and still real (CPU, not data
+volume, is the constraint), but development starts now, on the current
+single laptop, ahead of the M7 hardware move. Accepted tradeoff, stated
+explicitly rather than glossed: services are built and CI-verified
+normally, but **deployed to the live cluster incrementally, one at a
+time, with real `kubectl describe node` headroom checked before each
+one** — not all five at once, which would very likely repeat the
+`Insufficient cpu` scheduling failures already hit three separate times
+today (#46, #53/#54, #63). If real headroom runs out partway through,
+remaining services stay built-and-merged but not deployed until either
+more headroom is freed or M7 actually lands — a real, honest partial
+state is an acceptable outcome here, not a failure to hide.
+
+Originally gated on M7 (see `docs/roadmap/milestones.md`), for a different
+real reason than M12: not data volume, but CPU headroom. #77's real
+accounting (closed 2026-08-02, platform#81) found this single node already
+at 63% of allocatable CPU requested (2545m/4000m) after every existing
+over-provisioned request in the cluster was trimmed to real observed
+usage — roughly 1.4 real free cores, not enough room for the four to five
+new always-on Kafka producer/consumer services below on top of everything
+M8-M12 already adds. See ADR 0029 for the domain choice (real, external,
 always-flowing data — same "not dependent on a user" philosophy as #45,
 but genuinely external rather than self-generated), the external
 data-source comparisons, the lexicon-first sentiment-model decision, and
