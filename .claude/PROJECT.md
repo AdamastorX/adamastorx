@@ -78,25 +78,30 @@ was removed.
 Istio ambient mesh (ADR 0024) are approved decisions, not running
 components — still gates M11 (`sre-agent`) and the reopened M12
 bioinformatics milestone (ADR 0025), neither of which has started.
-**M13's real-time market-sentiment pipeline (ADR 0029)** was originally
-gated on M7 for CPU-headroom reasons (#77) but the owner explicitly
-overrode that gate 2026-08-02 to start now, on the current single-node
-laptop, deployed incrementally with a real headroom check before each
-service (`docs/roadmap/backlog.md`'s M13 intro has the full tradeoff).
-`news-ingestor` (#79) is live and verified with real data (real WSJ/
-MarketWatch articles matched and published to `news.article.published`);
-`market-data-ingestor` (#78) is live, connected to Finnhub's real
-websocket for all 5 watchlisted tickers (real trade-tick-to-Kafka proof
-pending real US market hours — the mechanism itself is already
-live-verified, see backlog #78); `sentiment-analyzer` (#80) is live,
-consuming `news.article.published` and publishing real, correctly-signed
-VADER scores to `news.sentiment.scored`; `aggregator` (#81) is live —
-this project's first Kafka Streams app, windowing `stock.price.tick`/
-`news.sentiment.scored` and serving the result over `GET /aggregates`
-(two real production bugs found and fixed post-deploy, backlog #85: a
-RocksDB/Alpine `libstdc++` gap and a RocksDB metrics-wiring bug, both
-silent failures a Healthy-looking pod masked — a liveness-probe hardening
-follow-up remains open); `visualizer` (#82) has not started. **Simplification pass (ADR 0021)**: `gateway` and
+
+**M13's real-time market-sentiment pipeline (ADR 0029) is complete and
+live** — originally gated on M7 for CPU-headroom reasons (#77), the owner
+explicitly overrode that gate 2026-08-02 to build and deploy
+incrementally on the current single-node laptop instead (a real headroom
+check before each service's own sync, `docs/roadmap/backlog.md`'s M13
+intro has the full tradeoff). All five services are built, merged, and
+running on the real cluster: `news-ingestor` (#79, real WSJ/MarketWatch
+articles → `news.article.published`), `market-data-ingestor` (#78, real
+Finnhub websocket → `stock.price.tick`), `sentiment-analyzer` (#80, real
+VADER scores → `news.sentiment.scored`), `aggregator` (#81, this
+project's first Kafka Streams app, windows both topics into per-ticker
+price/sentiment aggregates, serves `GET /aggregates`), and `visualizer`
+(#82, a static Chart.js page — same no-backend shape as `clinvar-viewer`
+— polling `aggregator` live). Two real, live-only bug classes were found
+and fixed along the way, not just in code review: #84 (Kafka CLI/
+ArgoCD-sync fragility) and #85 (`aggregator`'s two RocksDB incidents, a
+`libstdc++`/Alpine gap and a metrics-wiring bug, both silently masked by
+a Healthy-reporting pod — #85's own liveness-probe hardening follow-up
+remains open, tracked not glossed). Real trade/news traffic wasn't
+flowing at final verification time (outside real US market hours), so
+end-to-end proof used a mix of organic data (news) and directly-injected
+real messages/requests (ticks, aggregates) — stated honestly per
+service, not glossed as fully organic. **Simplification pass (ADR 0021)**: `gateway` and
 `whoami` were removed entirely; gnomAD, HGVS/liftover (#40/#41), and
 several over-scoped M4 items were cut — upheld by ADR 0022, except that
 M6 (the closed batch/bioinformatics reservation, backlog #30) was

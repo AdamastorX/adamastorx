@@ -81,6 +81,14 @@ real headroom check before each service, not disbelief in the constraint.
 See backlog.md's M13 section for the exact stated tradeoff. M13 can run
 alongside M8-M11; nothing in M8-M11 blocks it or is blocked by it.
 
+**M13 is Done as of 2026-08-04** — all five services (#78-#82) built,
+merged, and live on the real cluster, each with real end-to-end
+verification (backlog.md's M13 section has the per-service detail,
+including two real live-only bug classes found and fixed along the way,
+#84/#85). This is the first M8-M13-range milestone to close under this
+relaxed-sequencing rule, closed on its own real dependencies rather than
+waiting on M7.
+
 A milestone is Done (Definition of Done, `.claude/PROJECT.md`) when every
 item in it is closed — that gate is unchanged. What's relaxed is only the
 assumption that work on the *next* milestone can't begin until then;
