@@ -160,11 +160,11 @@ half-build speculatively now.
   Scratch namespace/pod/PVC deleted afterward; live instances' restart
   counts and PVCs confirmed unchanged throughout. Full log:
   `platform`'s `docs/runbooks/backup-restore.md`.
-- Backlog #73 (api's `postgres` superuser credential doesn't
-  authenticate, found investigating the chart's built-in backup option)
-  is a real, separate, currently-open finding this work surfaced but did
-  not fix — out of scope for a read-only backup task, needs a real
-  `pg_hba.conf` trust-mode maintenance window.
+- Backlog #73 (api's `postgres` superuser credential didn't authenticate,
+  found investigating the chart's built-in backup option) was a real,
+  separate finding this work surfaced but deliberately did not fix as
+  part of this read-only backup task — since fixed for real, separately
+  (2026-08-02, `platform`#88/#89), not left open.
 - No point-in-time recovery: restore is only ever to the last completed
   daily dump, up to ~24h of loss at worst. Stated as acceptable for this
   project's actual stakes, not revisited unless a real need for tighter

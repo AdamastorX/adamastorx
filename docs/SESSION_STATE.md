@@ -18,8 +18,9 @@ instance's existing least-privilege app user via the established
 out-of-band Secret pattern (`bootstrap/create-stateful-secrets.sh`) —
 not the Bitnami chart's own built-in `backup.enabled` cronjob, whose
 hardcoded `pg_dumpall`-as-`postgres`-superuser was confirmed live not to
-authenticate against `api`'s instance (new, separate, still-open finding
-tracked as backlog #73). Loki/Tempo explicitly left out of scope
+authenticate against `api`'s instance at the time (a separate finding
+tracked as backlog #73, since fixed for real, 2026-08-02,
+platform#88/#89 — see that item's own entry). Loki/Tempo explicitly left out of scope
 (regenerable observability data, not source-of-truth state — a stated
 decision). Restore proven for real (2026-07-30, `platform`#62): dumped
 both live databases read-only, restored into a scratch instance/PVC,
