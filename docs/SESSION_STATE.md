@@ -6,9 +6,34 @@ threads, and things the next session shouldn't have to re-discover the
 hard way. Prune/rewrite freely as work completes; this file describes
 *current* state, not history (git history is the record of the past).
 
-Last updated: 2026-08-01.
+Last updated: 2026-08-04.
 
 ## Where things stand
+
+**Backlog #23a (backup/restore for stateful data) done, live, restore
+proven — see ADR 0030.** Daily `pg_dump` CronJobs + a second, separate
+`local-path` PVC per PostgreSQL instance (`api`'s `postgresql`,
+`clinvar-service`'s `clinvar-postgresql`), each authenticating as the
+instance's existing least-privilege app user via the established
+out-of-band Secret pattern (`bootstrap/create-stateful-secrets.sh`) —
+not the Bitnami chart's own built-in `backup.enabled` cronjob, whose
+hardcoded `pg_dumpall`-as-`postgres`-superuser was confirmed live not to
+authenticate against `api`'s instance (new, separate, still-open finding
+tracked as backlog #73). Loki/Tempo explicitly left out of scope
+(regenerable observability data, not source-of-truth state — a stated
+decision). Restore proven for real (2026-07-30, `platform`#62): dumped
+both live databases read-only, restored into a scratch instance/PVC,
+row counts verified exact (`work_items` 15/15, `clinvar_variant_index`
+2,895,514/2,895,514, `clinvar_release` 4/4), real measured RTO
+(0.31s/46.4s, not estimated), live instances confirmed untouched
+throughout. Single node/disk loss stated explicitly as an accepted risk
+this does not protect against (ADR 0021/S7's existing acceptance, not a
+new one) — off-node replication deferred to a real multi-node migration
+(M7). ADR 0030 is this decision's record in `adamastorx`'s own log,
+since the mechanism/proof previously lived only as a `platform`-repo
+runbook (`docs/runbooks/backup-restore.md`) with no `adamastorx`-side
+decision record, a real gap given backlog #81 already names this item
+as a named prerequisite.
 
 **Backlog #57 (continuous profiling) done, live, both open questions
 resolved with real evidence — see ADR 0028.** Pyroscope deployed
