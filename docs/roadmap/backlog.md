@@ -670,11 +670,11 @@ is days, not weeks, and adds **no new runtime components**. Also in this
 milestone: **#31** (cross-cutting, reprioritized P2→P0 — its entry lives
 there; it is this milestone's first item).
 
-**88. Public read-only access: Cloudflare Tunnel to a read-only Grafana and `visualizer`**
-- Purpose: no article can link a live artifact today, so every claim requires trusting a screenshot — the exact failure mode this project exists to refute. ADR 0004 deferred Let's Encrypt "until a host with public DNS"; a `cloudflared` connector sidesteps that constraint entirely (outbound-only, no port-forward, edge TLS) at zero cost. ADR 0020 already named a tunnel as parked follow-up; the review (D2) names it the single biggest reputation multiplier available.
-- Acceptance Criteria: `cloudflared` deployed as an ArgoCD Application (ADR 0003 pattern), its token provisioned via the existing out-of-band Secret pattern (`bootstrap/create-stateful-secrets.sh`), never committed. Grafana exposed anonymously **read-only** (viewer role only — the exact exposure decision, including whether anonymous access is acceptable for a portfolio, recorded in the item or an ADR addendum); `visualizer` exposed; `api`/`aggregator`/Prometheus/Alertmanager explicitly **not** exposed, with the boundary written down. Verified live from a network outside the LAN: the public URL serves real dashboards. README gains the link.
-- Dependencies: none.
-- Priority: P0. Labels: `platform`, `documentation`.
+**88. Public read-only access: Cloudflare Tunnel, phased by real risk**
+- Purpose: no article can link a live artifact today, so every claim requires trusting a screenshot — the exact failure mode this project exists to refute. ADR 0004 deferred Let's Encrypt "until a host with public DNS"; a `cloudflared` connector sidesteps that constraint entirely (outbound-only, no port-forward, edge TLS) at zero cost. ADR 0020 already named a tunnel as parked follow-up; the review (D2) names it the single biggest reputation multiplier available. **Split into two phases (found during roadmap review, 2026-08-06) because "public read-only Grafana" and "public `visualizer`" are not the same risk**: `visualizer` is a static page with zero query surface (it calls `aggregator`'s own fixed `GET /aggregates`, nothing else) — publishing it is close to zero-risk. An anonymously-reachable Grafana with Explore open sits in front of a Prometheus carrying #56's real per-tenant API-key labels and internal hostnames — a materially different decision that deserves its own explicit go/no-go, not a default inherited from the tunnel setup.
+- Acceptance Criteria: **Phase 1 (do first)** — `cloudflared` deployed as an ArgoCD Application (ADR 0003 pattern), token via the existing out-of-band Secret pattern, never committed; `visualizer` exposed through it; `api`/`aggregator`/Prometheus/Alertmanager/Grafana explicitly **not** exposed yet. Verified live from outside the LAN. README gains the link — this alone unblocks every article's live artifact. **Phase 2 (separate go/no-go)** — Grafana exposed anonymously read-only, gated on: (a) confirming live, not assumed, whether the anonymous Viewer role can reach Explore (if yes, either disable Explore for that role or accept and state the query-surface exposure explicitly); (b) #107 landing first (the ntfy topic's own exposure class should be closed before adding a second public-facing surface); (c) which specific dashboards go public recorded, defaulting to Grafana's own **snapshot** feature (a static, non-interactive, non-live-querying export) for anything that doesn't need to stay live, rather than the whole instance being reachable by default.
+- Dependencies: #107 for Phase 2 only.
+- Priority: P0 (Phase 1). Labels: `platform`, `documentation`.
 
 **89. Article-asset capture habit, plus retroactive capture for existing fact packs**
 - Purpose: the three chaos fact packs and the ADR 0028 flame-graph reproduction are each ~90% of a publishable article, but text-only — producing the article today means re-running the incident to get the visuals. The review (D4) names this as the friction between "fact pack" and "published article", and the fix is a habit, not a tool.
@@ -710,12 +710,16 @@ by the expansion phase. Gating all future application work behind
 building Beyla and Faro would contradict the gate's own rationale (the
 marginal shape per addition having dropped below the doc/CI/alert tax) —
 so those items live in this milestone for sequencing, and are explicitly
-outside the gate. Of the infra components here, **Mimir (#94) and the
-blackbox exporter (#93) close real observability gaps** (retention that
-caps SLO reporting; verification that is currently a one-time human
-`curl`) and are inside the gated set; **Beyla (#102) and Faro (#103) are
-new signal classes, not gap-closers**, and are honestly labelled as such
-rather than carried in on the same justification.
+outside the gate. Of the infra components here, **the retention/SLO-report
+work (#94) and the blackbox exporter (#93) close real observability gaps**
+(a report ADR 0020's own table can't produce yet; verification that is
+currently a one-time human `curl`) and are inside the gated set. **Mimir
+itself moved to #108** (split from #94 during roadmap review,
+2026-08-06 — the real blocker was retention length, answerable with a
+config change and a bigger PVC, not a new component) and, like **Beyla
+(#102) and Faro (#103), is a new signal class/lab experiment, not a
+gap-closer**, and sits outside the gate honestly rather than being
+carried in on a justification it doesn't meet.
 
 **90. M13 observability surface: golden-signal dashboards, consumer-lag alerts, SLO-table rows**
 - Purpose: the review's A1 finding — M13 shipped below the project's own bar. `market-data-ingestor`, `news-ingestor`, `sentiment-analyzer`, and `aggregator` have no dashboards; `sentiment-analyzer` and `aggregator` (both Kafka consumers) have no consumer-lag alerts, the exact signal #21a/#76 established for `workers`; ADR 0020's SLO table has no rows for any of them.
@@ -724,8 +728,8 @@ rather than carried in on the same justification.
 - Priority: P0. Labels: `observability`.
 
 **91. End-to-end pipeline freshness SLI/SLO for the market pipeline**
-- Purpose: a streaming pipeline's headline SLO is freshness, not uptime. Nothing measures Finnhub-trade-timestamp → visible-in-`GET /aggregates` latency even though the events already carry both timestamps (#78's AC required them). #87's `priceAsOf`/`sentimentAsOf` made staleness *visible in the API*; this item makes it *measured and alerted* — the review's named "one SLO a streaming pipeline actually needs".
-- Acceptance Criteria: a real SLI (per-ticker event-time→serve-time lag, emitted from `aggregator`'s own metrics), a SLO row in ADR 0020's table, an alert with a runbook, and a dashboard panel. Verified live with real ticks during US market hours — the same "organic or it didn't happen" bar M13's own items set.
+- Purpose: a streaming pipeline's headline SLO is freshness, not uptime. Nothing measures Finnhub-trade-timestamp → visible-in-`GET /aggregates` latency even though the events already carry both timestamps (#78's AC required them). #87's `priceAsOf`/`sentimentAsOf` made staleness *visible in the API*; this item makes it *measured and alerted* — the review's named "one SLO a streaming pipeline actually needs". **Real trap found during roadmap review (2026-08-06), before this item was built, not after**: #87's own REST-poll fallback (`FinnhubQuotePoller`) publishes onto the *same* `stock.price.tick` topic in the *same* wire shape as the websocket path, every 30 minutes, specifically to cover off-hours/gaps. A naive SLI measuring event-time→serve-time lag over every tick indiscriminately would show a real, correct, by-design 30-minute lag for every fallback-sourced tick — which is not a freshness *problem*, it's the fallback doing exactly its job. An SLO built on that number is either constantly breached by design (if tight) or so loose it's meaningless during real market hours (if loosened to cover the fallback) — both failure modes this project's own SLO discipline (#21) exists to prevent.
+- Acceptance Criteria: the SLI must distinguish the two sources. Cheapest option: `market-data-ingestor` stamps each published tick with its real origin (`FinnhubWebSocketClient` vs `FinnhubQuotePoller`) — a label on the Kafka message or a parallel metric dimension — and the freshness SLI/SLO is computed (and alerted) against websocket-sourced ticks only, with the fallback's own cadence covered separately by #87's existing `market_data_quote_poll_succeeded_total`/`ticks_published_total` counters (already real, already sufficient for its own health). A SLO row in ADR 0020's table, an alert with a runbook, and a dashboard panel that plots the two sources distinguishably, not blended into one line. Verified live with real ticks during US market hours **and** verified that a fallback-sourced tick does not itself trip the freshness alert — the same "organic or it didn't happen" bar M13's own items set, extended to the negative case.
 - Dependencies: #90.
 - Priority: P1. Labels: `observability`, `backend`.
 
@@ -741,9 +745,9 @@ rather than carried in on the same justification.
 - Dependencies: none.
 - Priority: P1. Labels: `observability`, `platform`.
 
-**94. Long-term metrics (run #18a for real) and the first SLO-over-time report**
-- Purpose: 3-day Prometheus retention silently caps every reliability-over-time claim — no 28-day error budget, no month-over-month trend, no "I ran SLOs against real traffic for 60 days" article, which the review (D3) names the most differentiated article this project can publish precisely because almost nobody has the data. #18a scoped Mimir as an experiment "whenever there's an actual question it answers"; this is that question.
-- Acceptance Criteria: Mimir deployed as an ArgoCD Application (monolithic mode, real PVC, resource cost measured against #77's headroom accounting); Prometheus remote-writes to it; Grafana gains it as a datasource alongside (not replacing) Prometheus. #18a's write-up completed (what it adds at this scale, what it costs to run), closing that item. A first per-service SLO-over-time report from ADR 0020's table published as a dated doc — the article's evidence pack. Rollback path stated (removing remote-write leaves Prometheus standalone).
+**94. Raise Prometheus retention and publish the first SLO-over-time report**
+- Purpose: 3-day Prometheus retention silently caps every reliability-over-time claim — no 28-day error budget, no month-over-month trend, no "I ran SLOs against real traffic for 60 days" article, which the review (D3) names the most differentiated article this project can publish precisely because almost nobody has the data. **Split from Mimir (found during roadmap review, 2026-08-06): the actual blocker is retention length, not query-fan-out or multi-tenancy** — real numbers checked live, not assumed: Prometheus's own PVC is 2Gi (`argocd/apps/prometheus.yaml`), and the node has 176GB free (`kubectl ... stats/summary`). 30–60 days of this cluster's real, small metric volume costs tens of Gi, not a new component to operate on a node already at 83% CPU requested. Deploying Mimir to answer a question a config value already answers would be exactly the build-ahead-of-need pattern ADR 0021/0022 exist to catch — the Mimir *experiment itself* is real, separate lab value (see #108), just not a prerequisite for this report.
+- Acceptance Criteria: `server.retention` raised from `3d` to a stated value (30d or 60d, decided and recorded, not left as "some longer number") with `persistentVolume.size` increased to match, both against a real measured cost (PVC growth over the first week, not assumed from the retention flag alone). A first per-service SLO-over-time report from ADR 0020's table published as a dated doc once enough real days have accumulated — the article's evidence pack. ADR addendum recording the single-node/no-remote-write limits this accepts (no cross-cluster query fan-out, no multi-tenant isolation) — real constraints, stated rather than glossed over, and exactly what #108 exists to revisit if they ever become load-bearing.
 - Dependencies: none.
 - Priority: P1. Labels: `observability`, `platform`.
 
@@ -775,7 +779,7 @@ rather than carried in on the same justification.
 - Purpose: #23a/ADR 0030 proved restore on-node and accepted single-disk loss honestly. A restic CronJob to a free-tier object store converts that accepted risk into a real, measured off-site DR story — the only protection against the actual loss scenario (the laptop itself), and strictly better article content than the acceptance note.
 - Acceptance Criteria: restic (or rclone — choice recorded) CronJob backing up both pg_dump PVCs **and the local Terraform state** (currently laptop-only, the same exposure class) to object storage; credentials via the existing out-of-band pattern; a restore from the off-site copy proven once with measured RTO per #23a's precedent; cost/retention stated.
 - Dependencies: #23a (done).
-- Priority: P2. Labels: `platform`.
+- Priority: P1 (raised from P2, roadmap review 2026-08-06) — the only item in M15 that closes a real, currently-accepted DR gap (single-disk loss, ADR 0030's own stated tradeoff) rather than adding new capability; cheap (one CronJob) relative to that.
 
 **100. Secrets-management decision: External Secrets Operator vs SOPS (ADR)**
 - Purpose: secrets are script-generated out-of-band and never committed — safe from git leaks, but unversioned, unrecoverable if the laptop dies (the same exposure class as the local Terraform state), and unrotatable without a human session. Both established answers (ESO with an external store, SOPS+age committed to git) are lab-worthy; the decision deserves an ADR either way.
@@ -787,7 +791,7 @@ rather than carried in on the same justification.
 - Purpose: #77 hand-trimmed CPU requests from observed usage and recovered ~1.4 real cores; VPA's recommender automates exactly that loop and produces a standing requests-vs-recommendation comparison — a natural pair with #65 (Kubecost) and its own article. Recommendation-only (`updateMode: "Off"`): on a single-node cluster an actuating VPA eviction is an outage.
 - Acceptance Criteria: VPA deployed as an ArgoCD Application, `Off` mode for all workloads; a dashboard panel or scheduled report of recommended vs actual requests; one real adjustment cycle executed and recorded (adopt a recommendation, measure the delta against `kubectl describe node`).
 - Dependencies: #92 (ksm/node metrics feed recommendation quality — confirm against VPA's real requirements, drop if unfounded).
-- Priority: P2. Labels: `platform`, `observability`.
+- Priority: P2. Labels: `platform`, `observability`. **Sequence last among the hygiene items** (roadmap review, 2026-08-06) — #77 already did this project's own version of VPA's recommender loop by hand, once, on a one-node cluster with no churn to re-tune against; the marginal value of automating a loop that isn't currently being re-run is the lowest in this group.
 
 **102. Grafana Beyla: eBPF auto-instrumentation A/B against the manual OTel stack**
 - Purpose: a controlled experiment almost nobody can run outside a lab — zero-code eBPF RED metrics for services that already carry hand-built Micrometer/OTel instrumentation, on the same cluster, at the same time. "What do you actually lose with auto-instrumentation" is a genuinely novel comparison and this project owns both halves of it.
@@ -876,6 +880,18 @@ be picked up whenever.
 - Acceptance Criteria: the ntfy topic rotated to a fresh random value and moved out of git into the existing out-of-band Secret pattern (`bootstrap/create-stateful-secrets.sh` + a `secretKeyRef`/Alertmanager secret file, same shape every other real credential here uses), with the old topic treated as burned and never reused. The file's own comment updated so the stated threat model matches reality rather than contradicting it. Verified live: a real alert still reaches the owner's device after rotation (the whole point of ADR 0020's notification path — a rotation that silently breaks alerting is worse than the exposure). Separately, a check of whether any *other* "protection is that it isn't guessable" value is committed anywhere across the four repos — the class, not just this instance.
 - Dependencies: none. Should land before #88 (public exposure widens the blast radius of anything in this class).
 - Priority: P1. Labels: `platform`, `security`.
+
+**108. Mimir experiment: multi-tenant/remote-write long-term storage, once retention alone stops being enough**
+- Purpose: split from #94 during roadmap review (2026-08-06) — #94's own real numbers (2Gi Prometheus PVC, 176GB free on the node) show retention length was the actual blocker for the SLO-over-time report, not query fan-out or multi-tenancy, so #94 no longer needs Mimir as a prerequisite. The Mimir experiment itself is still real, stated lab value (#18a's original scoping: "run it whenever there's an actual question it answers") — this item is that question, kept honest by not being load-bearing for anything else.
+- Acceptance Criteria: Mimir deployed as an ArgoCD Application (monolithic mode, real PVC, resource cost measured against #77's headroom accounting, on top of whatever #94 has already consumed); Prometheus remote-writes to it; Grafana gains it as a second datasource alongside (not replacing) Prometheus. #18a's write-up completed honestly: what it adds at this project's real single-node scale over plain retention, what it costs to run, and whether the answer is "not yet worth it" — that is a legitimate, stated outcome, not a foregone conclusion. Rollback path stated (removing remote-write leaves Prometheus/#94's retention standing on its own).
+- Dependencies: #94.
+- Priority: P2. Labels: `observability`, `platform`.
+
+**109. AC template requires observability (dashboard, SLO row, alert, runbook) for any new service, checked by #97**
+- Purpose: ADR 0031's own root-cause finding for the M13 gap (#90's Purpose, and the ADR itself): #78–#82's ACs asked for real metrics and got them — nothing shipped in violation of its own AC. What was missing is that no AC template asked for the dashboard/SLO-row/alert/runbook standard ADR 0017/0020 set for every service before M13. #90 fixes M13's instance of the gap; without a template change, the next new service repeats it, and #97's CI check would then be permanently correcting after the fact instead of preventing.
+- Acceptance Criteria: the project's own service-AC template/checklist (wherever new-service ACs are drafted — `.claude/agents/` persona guidance and/or `CONTRIBUTING.md`, whichever actually governs this in practice, checked live rather than assumed) gains a standing line: a new service's AC is not complete without naming its golden-signal dashboard, its ADR 0020 SLO-table row, and any consumer-lag/staleness alert with a runbook, or an explicit stated reason one doesn't apply. #97's roster check (part a) extended to flag a newly-synced ArgoCD Application with no corresponding dashboard/SLO-table entry after a stated grace period, closing the loop instead of relying on the template alone.
+- Dependencies: #90, #97.
+- Priority: P1. Labels: `documentation`, `observability`.
 
 ---
 
