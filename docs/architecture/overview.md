@@ -4,13 +4,17 @@ Status: M0-M5 complete/verified live. The expansion phase (ADR 0022)
 followed, and its work has landed unevenly across milestones rather than
 one at a time — M6's progressive delivery and M8's guaranteed-fan-out/
 async-job-control-plane items are done and live, M9's continuous profiling
-is done and live, M10's autoscaling is done and live, and M7's multi-node/
-Cilium/Istio substrate plus M11's SRE agent, M12's reopened bioinformatics
-milestone, and M13's market-sentiment pipeline are all real, ADR-recorded
-decisions (0023-0029) that are **not yet built** — gated on a hardware
-move this project hasn't made. The diagram below shows the current shape,
-with a note underneath marking what exists today; it is the map, not the
-territory.
+is done and live, M10's autoscaling is done and live, and **M13's
+market-sentiment pipeline (ADR 0029) is done and live since 2026-08-04**
+(all five services, built under an explicit owner override of the M7
+gate — see backlog's M13 section). Still **not yet built**: M7's
+multi-node/Cilium/Istio substrate, M11's SRE agent, and M12's reopened
+bioinformatics milestone — real, ADR-recorded decisions (0023-0028)
+gated on a hardware move this project hasn't made. M14/M15 (ADR 0031,
+post-expansion consolidation: reach/packaging, then observability
+completeness) are scoped in the roadmap, not started. The diagram below
+shows the current shape, with a note underneath marking what exists
+today; it is the map, not the territory.
 
 ## Shape of the system
 
@@ -51,9 +55,18 @@ territory.
 │                                         outbox-table-plus-relay,       │
 │                                         ADR 0026) ─▶ ntfy.sh            │
 │                                                                          │
-│  clinvar-viewer (static IGV.js widget) ─┐                              │
-│  workload-generator (shaped synthetic   ┤─▶ public Ingress, keyed      │
-│    demand, permanent) ──────────────────┘                              │
+ │  Finnhub wss ─▶ market-data-ingestor ─▶ stock.price.tick ──┐          │
+ │  WSJ/MarketWatch RSS ─▶ news-ingestor ─▶ news.article.     │          │
+ │    published ─▶ sentiment-analyzer ─▶ news.sentiment.scored ┤          │
+ │                                                             ▼          │
+ │                                              aggregator (Kafka Streams,│
+ │                                               windowed + latest-known, │
+ │                                               GET /aggregates)         │
+ │                                                             │          │
+ │  clinvar-viewer (static IGV.js widget) ─┐                   │          │
+ │  visualizer (static Chart.js) ──────────┤─▶ public Ingress  │          │
+ │  workload-generator (shaped synthetic   ┤  (keyed for api;  │          │
+ │    demand, permanent) ──────────────────┘  CORS for visualizer)        │
 │                                                                          │
 │  OTel Collector, Prometheus + Alertmanager, Loki, Tempo,                │
 │  Pyroscope (continuous profiling) ─▶ Grafana                           │
@@ -149,8 +162,11 @@ allocatable at multiple points blocking real, unrelated work three
 separate times (backlog #77, Done) — CPU *requests* on the over-
 provisioned Postgres/Redis instances were trimmed to real observed usage,
 recovering the node to 63% requested (2545m/4000m, ~1.4 free cores). This
-headroom is real but finite, and is the stated reason M13 (below) is
-gated on the M7 hardware move rather than squeezed onto this node.
+headroom is real but finite — it was the stated reason M13 was originally
+gated on the M7 hardware move, until the owner explicitly overrode that
+gate (2026-08-02) and M13 was built here anyway, incrementally, with a
+fresh headroom check before each service's sync (83% requested after the
+full M13 deploy, per backlog #87's own last check).
 
 **Observability (four pillars):** `api`/`workers` export traces via
 Micrometer Tracing + OTLP to an OpenTelemetry Collector (ADR 0013) into
@@ -190,8 +206,10 @@ language-specific OTel bridge package wired into each service's own code,
 not something an init-container can retrofit.
 
 **M5 Clinical Variant Annotation:** `clinvar-service` (own `clinvar`
-namespace, ADR 0019) remains this project's only non-JVM component —
-FastAPI + `pysam` + `psycopg` + `confluent-kafka`. It owns ClinVar end to
+namespace, ADR 0019) is this project's first non-JVM component — FastAPI
++ `pysam` + `psycopg` + `confluent-kafka` (since joined by
+`sentiment-analyzer` and `workload-generator`, also Python). It owns
+ClinVar end to
 end: weekly download from NCBI, a pysam tabix rebuild, a dedicated
 Postgres instance, and a `clinvar_variant_index` table for rsID lookups.
 `api` calls it over HTTP (`ClinVarServiceClient`) and fronts the result
@@ -271,13 +289,12 @@ hasn't made yet:
   lifecycle, `notification-service`, real licensed public datasets
   (1000 Genomes/TCGA/GEO/TCIA); gated on M7's storage substrate. None of
   its services (#67-#72) exist yet.
-- **M13 Real-Time Market Sentiment Pipeline (ADR 0029)** — five new
-  Kafka-backed services (`market-data-ingestor`, `news-ingestor`,
-  `sentiment-analyzer`, `aggregator`, `visualizer`) for real, external,
-  always-flowing stock-price and financial-news sentiment data. Gated on
-  M7 for CPU headroom specifically (backlog #77's real accounting), not
-  data volume. **None of these services exist yet** — a reader should not
-  be surprised to find this milestone with zero running components.
+- ~~M13 is in this list~~ — **M13 is Done (2026-08-04), kept here only as
+  the correction record**: all five services (`market-data-ingestor`,
+  `news-ingestor`, `sentiment-analyzer`, `aggregator`, `visualizer`) are
+  built, merged, and live, built under an explicit owner override of the
+  M7 CPU-headroom gate (backlog's M13 section has the per-service record,
+  including live-only bugs #84/#85 and follow-ups #86/#87).
 - Admission-time policy enforcement (Kyverno/Gatekeeper, backlog #58),
   Chaos Mesh formalizing the existing manual chaos exercises (#64), and
   Kubecost cost visibility priced against real owned-hardware TCO (#65)
@@ -294,8 +311,9 @@ hasn't made yet:
 - **platform** owns everything below the application: cluster, ingress, TLS,
   GitOps delivery, CI pipeline definitions.
 - **services** owns the application: API, workers, `clinvar-service`,
-  `watchlist-service`, `clinvar-viewer`, `workload-generator`, shared
-  libraries.
+  `watchlist-service`, the M13 market pipeline (`market-data-ingestor`,
+  `news-ingestor`, `sentiment-analyzer`, `aggregator`, `visualizer`),
+  `clinvar-viewer`, `workload-generator`, shared libraries.
 - **observability** owns what you look at when something breaks: dashboards,
   alerts, runbooks, OTel config. Kept separate from `platform` deliberately —
   different change cadence and different owners in a real org (SRE vs.

@@ -25,6 +25,8 @@ state.
 | **M11 AI-Assisted SRE** | An `sre-agent` over the project's own Loki/Tempo/Prometheus/events/Alertmanager signals — a real incident-triage agent, evaluated honestly against the human-written fact packs. |
 | **M12 Bioinformatics Workloads (reopened)** | The bio-pipeline milestone ADR 0021 closed, reopened by ADR 0025 for the changed goal — a Metadata API, MinIO, real Nextflow pipelines, a saga-shaped Kafka lifecycle, a Notification service, and real licensed public data. |
 | **M13 Real-Time Market Sentiment Pipeline** | Real, continuously-flowing external market data — live stock prices and financial news sentiment for a fixed watchlist, decomposed into five Kafka-backed services (ADR 0029) — the flagship real-workload demo for the M7 hardware substrate; revives #55's stateful stream processing on a friendlier domain. |
+| **M14 Reach and Packaging** | The project becomes publicly presentable: the top-level narrative doc a first-time reader can land on (#31), public read-only access to the live system, and an article-asset habit. No new runtime components (ADR 0031). |
+| **M15 Consolidation: Operate What You Built** | Close the gaps the expansion phase opened — every shipped service gets its dashboards/SLOs/alerts including the pipeline freshness SLO, Kafka durability is re-decided against the system that exists now, long-term retention enables SLO reporting over time, and dependency/backup/secrets hygiene is automated. No new application services (ADR 0031). |
 
 M6–M9 are the expansion phase (ADR 0022). The goal changed — breadth and
 novelty, on top of the tight core ADR 0021 produced — and ADR 0022 states
@@ -88,6 +90,27 @@ including two real live-only bug classes found and fixed along the way,
 #84/#85). This is the first M8-M13-range milestone to close under this
 relaxed-sequencing rule, closed on its own real dependencies rather than
 waiting on M7.
+
+**M14 and M15 (ADR 0031) are the post-expansion consolidation phase**,
+driven by the 2026-08-06 independent staff-engineer review
+(`docs/reviews/2026-08-06-staff-engineer-review.md`). **M14 goes first on
+purpose and is days, not weeks**: the project's reputation goal is
+blocked on packaging, not on more engineering — #31's narrative doc, a
+publicly reachable read-only Grafana, and an article-asset habit. **M15
+closes the standard-of-care gaps the expansion phase opened** — most
+visibly that M13 shipped with scrape configs but no dashboards and no
+SLO-table rows, against the standard ADR 0017/0020 set for everything
+before it — re-decides ADR 0011's ephemeral-Kafka premise against the
+system that exists now rather than the one it was written for, and adds
+the retention window SLO reporting needs. A gate applies: **no new
+application services until M15 closes** — ADR 0022's "new operational
+shape" test is currently failed by every candidate, because the marginal
+new shape per service has dropped below the doc/CI/alert tax each
+addition carries. **M11 (`sre-agent`) is sequenced after M15
+deliberately, not cancelled** — its honest evaluation needs the retention
+window and richer signals M15 delivers. M7's hardware gate is unaffected;
+#104 records the explicit dedicated-host-vs-VM-interim decision so the
+gate is decided, not drifted.
 
 A milestone is Done (Definition of Done, `.claude/PROJECT.md`) when every
 item in it is closed — that gate is unchanged. What's relaxed is only the
