@@ -691,10 +691,31 @@ of care ADR 0017/0020 established for everything before it: M13's five
 services have scrape configs and one alert but no dashboards and no
 SLO-table rows; Kafka's durability premise (ADR 0011) predates the system
 that now depends on it; retention caps every reliability-over-time claim
-at 3 days. **Gate (ADR 0031): no new application services until this
-milestone closes.** Infra components below (Mimir, blackbox exporter,
-Beyla, Faro, VPA) close observability gaps; they are not new application
-surface and are not gated.
+at 3 days.
+
+**Fair attribution of the M13 gap, since this project's discipline is
+precise causes:** M13's own item ACs (#78–#82) asked for *metrics*, and
+real metrics were delivered — nobody shipped against their AC and skipped
+it. The gap is that the AC template never asked for the dashboard, SLO
+row, and alert that ADR 0017/0020 set as the standing bar. That is a
+template failure, not an execution failure, and #90 fixes the instance
+while the AC template itself is the thing to change so it doesn't recur.
+
+**Gate (ADR 0031): no new application services until #90–#97 close.**
+The gate is scoped to the standard-of-care debt (#90–#97) deliberately,
+**not to the full milestone**: #98–#103 are hygiene and lab-experiment
+items (Renovate, off-node backups, secrets, VPA, Beyla, Faro) that are
+genuinely valuable but are *new* surface themselves, not gaps left behind
+by the expansion phase. Gating all future application work behind
+building Beyla and Faro would contradict the gate's own rationale (the
+marginal shape per addition having dropped below the doc/CI/alert tax) —
+so those items live in this milestone for sequencing, and are explicitly
+outside the gate. Of the infra components here, **Mimir (#94) and the
+blackbox exporter (#93) close real observability gaps** (retention that
+caps SLO reporting; verification that is currently a one-time human
+`curl`) and are inside the gated set; **Beyla (#102) and Faro (#103) are
+new signal classes, not gap-closers**, and are honestly labelled as such
+rather than carried in on the same justification.
 
 **90. M13 observability surface: golden-signal dashboards, consumer-lag alerts, SLO-table rows**
 - Purpose: the review's A1 finding — M13 shipped below the project's own bar. `market-data-ingestor`, `news-ingestor`, `sentiment-analyzer`, and `aggregator` have no dashboards; `sentiment-analyzer` and `aggregator` (both Kafka consumers) have no consumer-lag alerts, the exact signal #21a/#76 established for `workers`; ADR 0020's SLO table has no rows for any of them.
@@ -739,8 +760,8 @@ surface and are not gated.
 - Priority: P1. Labels: `backend`, `architecture`.
 
 **97. Doc-drift automation: a CI roster check (the process fix has failed twice)**
-- Purpose: #32's checklist fix did not prevent #83; #83's own fix then regressed on the same file within 48 hours of M13 closing (overview.md again claimed M13's services "do not exist yet" — fixed again in the ADR 0031 PR). backlog.md also carried item #87 twice, verbatim, until the same review caught it. Two process failures on the exact file #32 named is the evidence; automation is the conclusion.
-- Acceptance Criteria: a CI job (the adamastorx repo's first workflow) that derives the component roster from `platform/argocd/apps/*.yaml` and fails if `docs/architecture/overview.md`'s live-component claims diverge; the same check flags a milestone marked Done in backlog.md that overview.md's status line still calls unbuilt. #32 annotated as superseded-by-automation with the reasoning recorded.
+- Purpose: #32's checklist fix did not prevent #83; #83's own fix then regressed on the same file within 48 hours of M13 closing (overview.md again claimed M13's services "do not exist yet" — fixed again in the ADR 0031 PR). Two process failures on the exact file #32 named is the evidence; automation is the conclusion. **Two further, different defects found in the same review are the reason this item's scope is wider than that one file** — and their real causes are distinct, recorded separately rather than lumped into one "drift" narrative: backlog.md carried item **#87 twice, verbatim** (cause: a bad `Edit` anchor in the #86(a) commit an hour earlier re-emitted the whole neighbouring block — a mechanical editing failure, *not* a checklist/process failure of the #32/#83 kind), and item **#79's header was destroyed entirely**, swallowed into the tail of #78's `Priority:` line, leaving the file with no `**79.` heading at all for an unknown period. Neither is caught by a component-roster check; both are caught by three lines of structural validation, which is why the AC below covers both classes.
+- Acceptance Criteria: a CI job (the adamastorx repo's first workflow) doing two independent things. **(a) Roster/status drift:** derive the component roster from `platform/argocd/apps/*.yaml` and fail if `docs/architecture/overview.md`'s live-component claims diverge; the same check flags a milestone marked Done in backlog.md that overview.md's status line still calls unbuilt. **(b) Backlog structural integrity** (cheap, and the class that actually produced two of this review's three real defects): every backlog item number appears exactly once as a top-level `**N.` heading, the numbering is contiguous with no gaps, and every item has its four expected lines (Purpose/Acceptance Criteria/Dependencies/Priority) — the #79 corruption is detectable purely as "a `Priority:` line containing a `**` heading fragment". Both halves proven by a deliberately-broken fixture failing CI before merge, the same bar #96 sets for itself. #32 annotated as superseded-by-automation with the reasoning recorded.
 - Dependencies: none.
 - Priority: P1. Labels: `documentation`, `platform`.
 
@@ -849,6 +870,12 @@ be picked up whenever.
 - Acceptance Criteria: either a real side effect (a persisted processed result or a real transformation, with its own metric) or an honest restatement in `workers`' README and ADR 0011's consequences that it is deliberate test/load infrastructure by design.
 - Dependencies: none.
 - Priority: P2. Labels: `backend`.
+
+**107. The ntfy alert topic's only stated protection is defeated by the repo that states it**
+- Purpose: found 2026-08-06 reviewing the ADR 0031 PR, not by the review itself. `platform/argocd/apps/prometheus.yaml`'s Alertmanager receiver posts to `https://ntfy.sh/adamastorx-alerts-<topic>`, and the comment immediately above it states the threat model plainly and correctly: *"ntfy topics are public-by-topic-name with no auth, so the only protection is not being guessable."* The topic name is then committed, in full, in that same file — in a **public** repository (`AdamastorX/platform`, confirmed `visibility: public`). The single stated protection is therefore not merely weak, it is fully defeated, and has been since the receiver shipped. Real, current impact: anyone can subscribe to the project's live alert stream (alert names, summaries, hostnames, and whatever future alerts add — a real information-disclosure channel into the cluster's internals), and anyone can publish arbitrary messages to the same topic (alert-fatigue nuisance, and a plausible social-engineering path given the owner treats these as real pages). This is not a leaked credential — ntfy topics carry no secret — which is exactly why it slipped past secret-scanning and past a careful human review that read this same file: it is a *design* whose stated assumption the repository itself invalidates. **Related and worth deciding together, not after:** #88 exposes Grafana publicly and read-only; its AC should pin down explicitly whether the anonymous Viewer role can reach Explore, since arbitrary PromQL against the Prometheus datasource would expose #56's per-tenant API-key labels and internal hostnames — verified live against the real deployed Grafana, not assumed from a documented default.
+- Acceptance Criteria: the ntfy topic rotated to a fresh random value and moved out of git into the existing out-of-band Secret pattern (`bootstrap/create-stateful-secrets.sh` + a `secretKeyRef`/Alertmanager secret file, same shape every other real credential here uses), with the old topic treated as burned and never reused. The file's own comment updated so the stated threat model matches reality rather than contradicting it. Verified live: a real alert still reaches the owner's device after rotation (the whole point of ADR 0020's notification path — a rotation that silently breaks alerting is worse than the exposure). Separately, a check of whether any *other* "protection is that it isn't guessable" value is committed anywhere across the four repos — the class, not just this instance.
+- Dependencies: none. Should land before #88 (public exposure widens the blast radius of anything in this class).
+- Priority: P1. Labels: `platform`, `security`.
 
 ---
 

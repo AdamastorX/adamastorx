@@ -103,10 +103,14 @@ SLO-table rows, against the standard ADR 0017/0020 set for everything
 before it — re-decides ADR 0011's ephemeral-Kafka premise against the
 system that exists now rather than the one it was written for, and adds
 the retention window SLO reporting needs. A gate applies: **no new
-application services until M15 closes** — ADR 0022's "new operational
+application services until backlog #90–#97 close** — the standard-of-care
+subset of M15, not the whole milestone. ADR 0022's "new operational
 shape" test is currently failed by every candidate, because the marginal
 new shape per service has dropped below the doc/CI/alert tax each
-addition carries. **M11 (`sre-agent`) is sequenced after M15
+addition carries. #98–#103 (Renovate, off-node backups, secrets, VPA,
+Beyla, Faro) sit in M15 for sequencing but are deliberately *outside* the
+gate: they are new surface themselves, not expansion-phase debt, and
+gating future work behind them would contradict the gate's own reasoning. **M11 (`sre-agent`) is sequenced after M15
 deliberately, not cancelled** — its honest evaluation needs the retention
 window and richer signals M15 delivers. M7's hardware gate is unaffected;
 #104 records the explicit dedicated-host-vs-VM-interim decision so the

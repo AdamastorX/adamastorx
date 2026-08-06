@@ -271,14 +271,23 @@ per-tenant API key via the same out-of-band Secret mechanism.
 **Not yet:** the expansion phase's remaining milestones are real,
 ADR-recorded decisions that have **not been built**, not silent gaps —
 each is gated on a dedicated-desktop hardware move (M7) this project
-hasn't made yet:
+hasn't made yet.
+
+*Correction record:* M13 was listed below as unbuilt until 2026-08-06,
+two days after it went live — the third recurrence of drift on this
+file, and the reason backlog #97 replaces process with a CI check. It is
+not in the list any more because it is done, not because the claim was
+softened; the live description is at the top of this document.
 
 - **M7 Multi-Node Substrate**: a multi-node k3s rebuild, **Cilium**
   replacing flannel with Hubble flow observability (ADR 0023) and the
   project's first NetworkPolicies, an **Istio ambient mesh** layered on
   afterward for mTLS and traffic-control/circuit-breaking (ADR 0024),
   replicated storage, and node-drain/rolling-upgrade exercises. Backlog
-  #23a (backup/restore) is a hard prerequisite and is itself still open.
+  #23a (backup/restore) is a hard prerequisite and is **Done** as of
+  2026-08-04 (platform#62, ADR 0030) — a real restore drill with a
+  measured RTO, on-node only, with single-disk loss accepted explicitly
+  (backlog #99 converts that acceptance into a real off-site copy).
   **Neither Cilium nor Istio is deployed anywhere in this cluster today**
   — both remain on `.claude/PROJECT.md`'s approved list only via their
   respective ADRs, not as running components.
@@ -289,12 +298,6 @@ hasn't made yet:
   lifecycle, `notification-service`, real licensed public datasets
   (1000 Genomes/TCGA/GEO/TCIA); gated on M7's storage substrate. None of
   its services (#67-#72) exist yet.
-- ~~M13 is in this list~~ — **M13 is Done (2026-08-04), kept here only as
-  the correction record**: all five services (`market-data-ingestor`,
-  `news-ingestor`, `sentiment-analyzer`, `aggregator`, `visualizer`) are
-  built, merged, and live, built under an explicit owner override of the
-  M7 CPU-headroom gate (backlog's M13 section has the per-service record,
-  including live-only bugs #84/#85 and follow-ups #86/#87).
 - Admission-time policy enforcement (Kyverno/Gatekeeper, backlog #58),
   Chaos Mesh formalizing the existing manual chaos exercises (#64), and
   Kubecost cost visibility priced against real owned-hardware TCO (#65)

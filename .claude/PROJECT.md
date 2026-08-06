@@ -121,8 +121,12 @@ pipeline freshness SLO (#91), kube-state-metrics/node-exporter (#92),
 blackbox synthetics (#93), long-term retention + first SLO-over-time
 report (#94), a mandated re-decision of ADR 0011's ephemeral Kafka (#95),
 event contracts (#96), doc-drift *automation* (#97 — the process fix has
-failed twice), and hygiene items #98–#103. **Gate: no new application
-services until M15 closes.** M11 (`sre-agent`) is sequenced after M15
+failed twice), plus hygiene/lab items #98–#103 and the security item
+#107 (a committed ntfy topic whose only stated protection was not being
+guessable). **Gate: no new application services until #90–#97 close** —
+the standard-of-care subset, not the whole milestone; #98–#103 are new
+surface themselves and sit outside the gate deliberately. M11
+(`sre-agent`) is sequenced after M15
 deliberately (its evaluation needs the retention window), not cancelled;
 M7's hardware gate stands, with #104 recording an explicit
 dedicated-host-vs-VM-interim decision.

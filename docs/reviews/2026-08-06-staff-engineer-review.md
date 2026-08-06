@@ -333,3 +333,77 @@ dependencies:
 - Don't build M12 before M7 — its gating reasoning (storage substrate,
   data volume) is still correct, and M13 already provides the "real
   external data" content thread meanwhile.
+
+---
+
+## 10. Review of this review (2026-08-06, before merge)
+
+Every load-bearing claim above was re-checked against the real repos
+before this document was merged, rather than accepted on the strength of
+its own reasoning. **All of §1's findings held**: M13 has scrape configs
+for four services, exactly one alert (`MarketDataStaleFeed` of 11 total),
+and zero dashboards — confirmed in *both* `platform/argocd/apps/
+grafana.yaml` and `observability/grafana/dashboards/` (the latter holds
+only a README), so this is not a case of looking in the wrong repo.
+`kube-state-metrics`/`node-exporter`/`pushgateway` are all
+`enabled: false`; `retention: "3d"` is real; #31 is still P2 with an AC
+that stops at M5; `overview.md` still claimed M13's services "do not
+exist yet". The duplicate #87 is real.
+
+Four things changed as a result of that re-check.
+
+**1. The duplicate #87 was mis-attributed, and a second, worse defect
+sat next to it.** The duplicate was not a checklist/process failure of
+the #32/#83 kind — it came from a bad `Edit` anchor in the #86(a) commit
+roughly an hour earlier, which re-emitted the whole neighbouring block.
+Separately, and not found by this review: **item #79's heading does not
+exist at all**, having been swallowed into the tail of #78's `Priority:`
+line (`grep -c '^\*\*79\.'` returns `0`; of items 1–87, only 79 has no
+heading). Neither defect is caught by a component-roster check, which is
+what #97 originally proposed — so #97's AC was widened to add cheap
+structural validation of backlog.md itself (each number appears exactly
+once, numbering contiguous, four expected lines per item). Two of the
+three real defects this review found would otherwise have gone on
+recurring under the automation meant to end them.
+
+**2. The gate was too wide.** As originally written it blocked all new
+application services until *all* of M15 closed — including #98–#103
+(Renovate, off-node backups, a secrets decision, VPA, Beyla, Faro). But
+Beyla and Faro are new signal classes, not gaps the expansion phase left
+behind: gating future work behind building them contradicts the gate's
+own rationale (marginal shape per addition having fallen below the
+doc/CI/alert tax). The gate now stops at #97. Mimir and the blackbox
+exporter stay inside it, because retention and continuous verification
+are real gaps; Beyla and Faro are labelled honestly as new surface
+instead of being carried in on a justification they don't meet.
+
+**3. "M13 broke the project's own rules" needed a fairer cause.** True
+against the ADR 0017/0020 standard, but #78–#82's own ACs asked for
+*metrics*, and real metrics were delivered — nothing shipped in
+violation of its own AC. The defect is that no AC asked for the
+dashboard/SLO row/alert/runbook. That makes it a template failure, and
+the template is the thing to fix so M14/M15 don't repeat it.
+
+**4. One finding this review missed, in a file it read.** §Scope lists
+"the alert rules in `argocd/apps/prometheus.yaml`" as evidence examined.
+That file's Alertmanager receiver states its threat model correctly —
+*"ntfy topics are public-by-topic-name with no auth, so the only
+protection is not being guessable"* — and then commits the topic name in
+full, in the same file, in a **public** repository, defeating it
+completely. Anyone can read the project's live alert stream or publish
+into it. It is not a leaked credential (ntfy topics hold no secret),
+which is exactly why secret scanning and a careful human read both
+passed over it: the defect is a design whose own stated assumption the
+repository invalidates. Filed as **#107**, sequenced before #88, since
+#88 deliberately widens public reach. #88's AC also now has to pin down
+— verified live, not assumed from a documented default — whether an
+anonymous Grafana Viewer can reach Explore, because arbitrary PromQL
+against the Prometheus datasource would expose #56's per-tenant
+API-key labels and internal hostnames.
+
+**A fifth drift instance was found in the file this PR set out to fix.**
+`overview.md`'s M7 bullet still called backlog #23a (backup/restore) "a
+hard prerequisite and itself still open"; #23a has been Done since
+2026-08-04 (platform#62, ADR 0030). Corrected here. That the drift-fix
+PR itself carried a fourth stale claim in the same document is the
+strongest single argument in this review for #97 existing at all.
