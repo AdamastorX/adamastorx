@@ -109,6 +109,28 @@ deliberately reopened under a new milestone number, M12, once the
 project's own stated goal changed (ADR 0022/0025) — not silently
 reversed.
 
+**Next up: M14 Reach and Packaging, then M15 Consolidation (ADR 0031,
+2026-08-06).** An independent staff-engineer review
+(`docs/reviews/2026-08-06-staff-engineer-review.md`) found the project's
+binding constraints are now packaging and drift, not technical depth:
+M14 makes the project publicly presentable (#31's narrative doc,
+reprioritized P0; public read-only access via #88's tunnel; the
+article-asset habit #89), and M15 closes the standard-of-care gaps the
+expansion phase opened — M13's missing dashboards/SLO rows (#90), the
+pipeline freshness SLO (#91), kube-state-metrics/node-exporter (#92),
+blackbox synthetics (#93), long-term retention + first SLO-over-time
+report (#94), a mandated re-decision of ADR 0011's ephemeral Kafka (#95),
+event contracts (#96), doc-drift *automation* (#97 — the process fix has
+failed twice), plus hygiene/lab items #98–#103 and the security item
+#107 (a committed ntfy topic whose only stated protection was not being
+guessable). **Gate: no new application services until #90–#97 close** —
+the standard-of-care subset, not the whole milestone; #98–#103 are new
+surface themselves and sit outside the gate deliberately. M11
+(`sre-agent`) is sequenced after M15
+deliberately (its evaluation needs the retention window), not cancelled;
+M7's hardware gate stands, with #104 recording an explicit
+dedicated-host-vs-VM-interim decision.
+
 See `docs/architecture/overview.md` for the detailed real/live-vs-not-yet
 breakdown, `docs/roadmap/milestones.md` and `docs/SESSION_STATE.md` for
 exactly what's in flight right now — this section is a point-in-time
