@@ -63,12 +63,16 @@ unchanged in scope; their gates stand):
   read-only Grafana + `visualizer`, sidestepping ADR 0004's no-public-DNS
   constraint), and an article-asset habit. Days, not weeks; no new
   runtime components. #31 is reprioritized P2→P0 and is M14's first item.
-- **M15 Consolidation: Operate What You Built** (backlog #90–#103):
-  M13's observability surface (dashboards, consumer-lag alerts, SLO
-  rows), the pipeline freshness SLO, kube-state-metrics/node-exporter
-  (unblocking #21d and #63's scale-to-zero question), blackbox synthetic
-  monitoring, long-term metrics via the deferred #18a Mimir experiment
-  plus a first SLO-over-time report, the Kafka durability re-decision,
+- **M15 Consolidation: Operate What You Built** (backlog #90–#103,
+  #107–#109): M13's observability surface (dashboards, consumer-lag
+  alerts, SLO rows), an AC template fix so the next new service doesn't
+  repeat the gap (#109), the pipeline freshness SLO with the REST-poll
+  fallback correctly excluded from it (#91), kube-state-metrics/
+  node-exporter (unblocking #21d and #63's scale-to-zero question),
+  blackbox synthetic monitoring, raised Prometheus retention plus a
+  first SLO-over-time report (#94, split from the deferred #18a Mimir
+  experiment, which moved to #108 once #94's own real numbers showed
+  retention length was the actual blocker), the Kafka durability re-decision,
   event contracts across the Java↔Python boundary, doc-drift *automation*
   (#97, replacing the failed checklist approach), and hygiene:
   Renovate, off-node backup copies, a secrets-management decision, VPA,
@@ -85,11 +89,13 @@ backups, a secrets decision, VPA, Beyla, Faro) are worth doing and are
 sequenced here, but they are *new* surface rather than debt the
 expansion phase left behind — gating all future application work behind
 building Beyla and Faro would contradict this gate's own rationale.
-Among the infra components: **Mimir (#94) and the blackbox exporter
-(#93) are inside the gated set** because they close real gaps (retention
-that caps every SLO-over-time claim; verification that is currently a
-one-time human `curl`). **Beyla (#102) and Faro (#103) are outside it**,
-and are labelled honestly as new signal classes rather than carried in
+Among the infra components: **the retention/SLO-report work (#94) and
+the blackbox exporter (#93) are inside the gated set** because they
+close real gaps (a report ADR 0020's table can't produce yet;
+verification that is currently a one-time human `curl`). **Mimir itself
+(#108, split from #94) sits outside the gate alongside Beyla (#102) and
+Faro (#103)**, and is labelled honestly as a lab experiment rather than
+carried in
 on a gap-closing justification they don't meet.
 
 **3. M11 (`sre-agent`) is sequenced after M15, deliberately** — its

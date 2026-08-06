@@ -121,9 +121,13 @@ pipeline freshness SLO (#91), kube-state-metrics/node-exporter (#92),
 blackbox synthetics (#93), long-term retention + first SLO-over-time
 report (#94), a mandated re-decision of ADR 0011's ephemeral Kafka (#95),
 event contracts (#96), doc-drift *automation* (#97 — the process fix has
-failed twice), plus hygiene/lab items #98–#103 and the security item
-#107 (a committed ntfy topic whose only stated protection was not being
-guessable). **Gate: no new application services until #90–#97 close** —
+failed twice, scope widened to cover backlog.md's own structural
+integrity), and an AC-template fix (#109) so the next new service can't
+repeat M13's gap, plus hygiene/lab items #98–#103, the Mimir experiment
+split out on its own (#108), and the security item #107 (a committed
+ntfy topic whose only stated protection was not being guessable — lands
+before #88's Grafana phase). **Gate: no new application services until
+#90–#97 close** —
 the standard-of-care subset, not the whole milestone; #98–#103 are new
 surface themselves and sit outside the gate deliberately. M11
 (`sre-agent`) is sequenced after M15
