@@ -3,6 +3,11 @@
 Open-source platform engineering project. The application is a vehicle; the real
 subject matter is running distributed systems in production the boring, reliable way.
 
+**New here? Read [`docs/WHY.md`](docs/WHY.md) first** — the real bugs
+found by deploying things, the one architecture decision that got
+reversed and why, and what each milestone actually proves. A few
+minutes, no ADR-reading required.
+
 ## Vision
 
 Build and operate a small, realistic distributed system end to end — cluster,
@@ -13,10 +18,13 @@ worth solving, not to ship a product.
 
 ## Scope boundaries
 
-Explicitly **out**: service mesh, Vault, Crossplane, Backstage, Cilium. If a
-problem can be solved with what's already approved (see Technology decisions
-below), that's the answer — new tools require a real, demonstrated need and an
-ADR.
+Explicitly **out**: Vault, Crossplane, Backstage. If a problem can be solved
+with what's already approved (see Technology decisions below), that's the
+answer — new tools require a real, demonstrated need and an ADR. Cilium and
+a service mesh were both on this list originally; both exclusions were
+overturned by ADR (0023, 0024) once M7's real, stated need for them existed
+— neither is deployed yet (both are M7, gated on a hardware move), but
+they're no longer excluded.
 
 ## Repository map
 
