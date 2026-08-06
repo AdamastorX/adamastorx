@@ -91,6 +91,20 @@ pick up the change to the tracked file — refresh the parent that tracks
 the manifest, not the child whose live object you're diffing. Revert
 the same way (a real PR), and expect the same refresh lag.
 
+**Same gremlin, another real trigger (backlog #107, 2026-08-06)**:
+merging a new `alertmanager.extraSecretMounts` key into `prometheus`'s
+own `valuesObject` and syncing produced `Synced`/`Healthy` with the
+`Application`'s own `spec.source.helm.valuesObject.alertmanager.
+extraSecretMounts` still empty — the sync had nothing new to apply, so
+`prometheus-alertmanager-0` stayed the exact same 11-day-old pod, 0
+restarts, no new volume. Not a chart-values typo (confirmed correct
+against the real subchart's own `values.yaml`) — the same
+`argocd.argoproj.io/refresh=hard` on `root` fixed it. A useful tell for
+next time: if a `Synced`/`Healthy` chart-values change produces zero
+observable pod change, check whether the value actually reached
+`spec.source.helm.valuesObject` before assuming the values themselves
+are wrong.
+
 **Two independent integration points share the same "blocks for tens of
 seconds before failing" shape**: Kafka's producer `send()` (found in
 scenario 1, ~60s `max.block.ms`) and HikariCP's connection acquisition
