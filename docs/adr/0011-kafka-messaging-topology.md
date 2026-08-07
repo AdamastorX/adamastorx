@@ -150,3 +150,16 @@ services#2 (API) is done and deployed per ADR 0010.
   is the trigger to revisit "no partition key"; multi-cluster or
   topic-self-service needs are the trigger to revisit Strimzi — none of
   these are reasons to build toward now.
+
+**Superseded in part by ADR 0032 (2026-08-07).** The broker's own
+ephemeral storage (this ADR's `persistence: enabled: false`, "a
+current constraint to revisit... not a permanent design choice") is
+revisited and reversed: real, repeated bring-up incidents (backlog
+#79/#80/#84) confirmed the revisit trigger this ADR itself named was
+hit, for a system that has grown to 6 application topics plus Kafka
+Streams' own internal changelog topics — not the 1-topic/log-only-
+consumer system this ADR was written for. See ADR 0032 for the full
+reasoning, including why Strimzi was re-examined and rejected again on
+its own current-state merits, not dismissed by inertia. Everything
+else in this ADR (client library, topic/partition/key choices, error
+handling, RF=1 as a broker-loss risk) is unchanged and still accurate.
