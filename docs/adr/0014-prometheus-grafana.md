@@ -123,3 +123,41 @@ existed yet: no Prometheus/Grafana anywhere in `platform`.
   wants metrics from more than 3 days ago won't have them — acceptable
   for a dev cluster where labs are run and documented close to when
   they happen, not a production audit-trail requirement.
+
+## Addendum (2026-08-07, backlog #94): retention raised 3d → 30d
+
+3-day retention silently capped every reliability-over-time claim this
+project could make — no 28-day error budget, no month-over-month
+trend, no "SLOs held against real traffic for 30 days" report, named
+by the 2026-08-06 staff-engineer review as the most differentiated
+article this project can publish precisely because almost nobody
+publishes that data. **Split from a Mimir deploy, not bundled with
+one** (backlog #108 keeps Mimir as a separate, real lab experiment):
+the actual blocker was retention length, not query fan-out or
+multi-tenancy, and deploying a whole new component to answer a
+question a config value already answers would be exactly the
+build-ahead-of-need pattern ADR 0021/0022 exist to catch.
+
+**Real measured cost, not assumed from the retention flag alone**:
+`kubectl exec ... du -sh /data` against the live Prometheus pod showed
+1.1G accumulated over the existing 3-day retention window — a real,
+measured rate of ~370Mi/day. 30 days costs ~11Gi; the node had 162.6G
+free at measurement time (`df -h` on the same pod). `server.retention`
+raised to `30d`; `persistentVolume.size` raised from `2Gi` to `16Gi`
+(headroom above the measured 30-day figure, not a bare minimum —
+`local-path`'s own request-enforcement gap, already documented
+elsewhere in this project, means this number is informational sizing
+intent more than a hard cap, but it's set honestly regardless).
+
+**Real, stated limits this decision accepts, not glossed over**: this
+remains a single-node Prometheus with no remote-write and no
+cross-cluster query fan-out — a real ceiling if this project ever adds
+a second cluster or needs multi-tenant isolation. #108 (the Mimir
+experiment) is the trigger to revisit this, once/if either of those
+becomes a real, load-bearing need rather than a hypothetical one.
+
+The first per-service SLO-over-time report this addendum's own
+retention bump exists to enable is **not yet published** — it needs 30
+real days of accumulated data to exist honestly, which this addendum's
+own timestamp cannot satisfy by definition. Tracked to close out
+backlog #94 once that real window has actually elapsed.
