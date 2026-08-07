@@ -1,0 +1,94 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  YQ_VERSION: v4.44.6
+
+jobs:
+  # backlog #97(b): backlog.md structural integrity. Self-test first --
+  # the checker must actually fail on the two real historical
+  # corruption shapes (#79 swallowed heading, #87 duplicated heading)
+  # and on a plain missing-label case, and pass on a deliberately
+  # closed-format item, before its verdict on the real file is trusted.
+  backlog-structure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Self-test -- checker must pass a valid fixture
+        run: python3 scripts/check_backlog_structure.py scripts/fixtures/valid.md
+
+      - name: Self-test -- checker must fail on a duplicated heading (#87 shape)
+        run: |
+          if python3 scripts/check_backlog_structure.py scripts/fixtures/broken-duplicate-heading.md; then
+            echo "::error::checker did not fail on a duplicated heading fixture"
+            exit 1
+          fi
+
+      - name: Self-test -- checker must fail on a swallowed heading (#79 shape)
+        run: |
+          if python3 scripts/check_backlog_structure.py scripts/fixtures/broken-swallowed-heading.md; then
+            echo "::error::checker did not fail on a swallowed-heading fixture"
+            exit 1
+          fi
+
+      - name: Self-test -- checker must fail on a missing required label
+        run: |
+          if python3 scripts/check_backlog_structure.py scripts/fixtures/broken-missing-label.md; then
+            echo "::error::checker did not fail on a missing-label fixture"
+            exit 1
+          fi
+
+      - name: Check the real backlog.md
+        run: python3 scripts/check_backlog_structure.py docs/roadmap/backlog.md
+
+  # backlog #97(a): docs/architecture/overview.md roster drift against
+  # the platform repo's own live Application manifests. Same self-test
+  # bar as the structural check above.
+  roster-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: adamastorx
+
+      - uses: actions/checkout@v7
+        with:
+          repository: AdamastorX/platform
+          path: platform
+
+      - name: Install yq ${{ env.YQ_VERSION }}
+        run: |
+          curl -sSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" \
+            -o /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
+
+      - name: Self-test -- checker must fail when a live component is unmentioned (#83 shape)
+        run: |
+          if bash adamastorx/scripts/check-roster-drift.sh platform adamastorx/scripts/fixtures/overview-missing-component.md; then
+            echo "::error::checker did not fail on a component missing from overview.md"
+            exit 1
+          fi
+
+      - name: Check the real overview.md
+        run: bash adamastorx/scripts/check-roster-drift.sh platform adamastorx/docs/architecture/overview.md
+
+  ci:
+    needs: [backlog-structure, roster-drift]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs succeeded
+        run: |
+          if [ "${{ needs.backlog-structure.result }}" != "success" ] \
+            || [ "${{ needs.roster-drift.result }}" != "success" ]; then
+            echo "One or more jobs failed:"
+            echo "  backlog-structure: ${{ needs.backlog-structure.result }}"
+            echo "  roster-drift: ${{ needs.roster-drift.result }}"
+            exit 1
+          fi
+          echo "All jobs succeeded."
