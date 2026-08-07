@@ -893,6 +893,18 @@ be picked up whenever.
 - Dependencies: #90, #97.
 - Priority: P1. Labels: `documentation`, `observability`.
 
+**110. Flaky test: `FinnhubQuotePollerIntegrationTest.realQuoteResponseProducesAPublishedTickForEveryReachableTicker`**
+- Purpose: found live, 2026-08-07, blocking backlog #90's own PR (services#60) — a completely unrelated CI run (that PR touches only `sentiment-analyzer`) failed `build` with `expected: 4 but was: 1` on this test, in `market-data-ingestor`. Re-running the exact same commit's CI job passed clean, confirming a real flake, not a real regression. Root cause suspected, not yet confirmed: `KafkaTestUtils.getRecords(consumer, Duration.ofSeconds(10))` returns as soon as any records are available from a single `poll()` batch rather than guaranteeing it waits for all 4 expected records — under real CI resource contention, the 4 real async ticks (each its own HTTP call + Kafka publish) can plausibly land across multiple poll batches, and the test reads only the first one. Not fixed in the PR that found it (out of scope — that PR never touches `market-data-ingestor`), recorded here instead of silently re-run until green and forgotten.
+- Acceptance Criteria: confirm the suspected root cause (or find the real one) and fix it — likely a loop that keeps polling/accumulating until either 4 records are collected or the 10s deadline is hit, the same shape `_drain_scored_events` in `sentiment-analyzer/tests/test_consumer_integration.py` already uses for exactly this reason. Verified by intentionally reproducing the flake under CPU pressure (or enough repeated runs) before the fix, and confirming it stops recurring after.
+- Dependencies: none.
+- Priority: P2. Labels: `backend`, `testing`.
+
+**111. `observability/runbooks/`: four live alerts have no runbook, and the index's own alert count was stale**
+- Purpose: found live, 2026-08-07, while adding backlog #90's four new runbooks — `runbooks/README.md` claimed "six alerts are live today" while `prometheus.yaml` actually carries 14 (10 pre-existing + #90's 4 new ones), and cross-checking that real count against the runbook directory found `WorkersConsumerMissing`, `WatchlistDlqDepthHigh`, `MarketDataStaleFeed`, and `ApiRateLimitRejectionsHigh` each have no runbook file at all — a direct violation of backlog #22's own "one runbook per alert" rule, unnoticed until this count was actually checked against the real file list rather than the README's own claim. The README's count is corrected as part of #90's PR; the four missing runbooks themselves are not written there (scope discipline — #90's own AC only covers its own new alerts) and are tracked here instead.
+- Acceptance Criteria: one runbook per missing alert (`WorkersConsumerMissing.md`, `WatchlistDlqDepthHigh.md`, `MarketDataStaleFeed.md`, `ApiRateLimitRejectionsHigh.md`), matching the existing runbook shape (what fired, what it means, first response grounded in this project's own real incident history, how to confirm resolution) — `WorkersConsumerLagHigh.md`/`AggregatorConsumerLagHigh.md` are the closest real templates for the two consumer-missing ones. `runbooks/README.md`'s own index table updated to point at all four once written, closing the gap this item's own Purpose found.
+- Dependencies: none.
+- Priority: P2. Labels: `documentation`, `observability`.
+
 ---
 
 ## Simplification
