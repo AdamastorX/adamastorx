@@ -163,3 +163,18 @@ reasoning, including why Strimzi was re-examined and rejected again on
 its own current-state merits, not dismissed by inertia. Everything
 else in this ADR (client library, topic/partition/key choices, error
 handling, RF=1 as a broker-loss risk) is unchanged and still accurate.
+
+**Addendum (2026-08-08, backlog #106): `workers`' own log-only handler
+is deliberate, stated explicitly rather than left implicit.** A
+log-only consumer could read as an unfinished feature; it isn't one.
+`workers` has become load-bearing test infrastructure for two other
+real, shipped pieces of this project — KEDA's own scaling target
+(backlog #63) and `WorkersConsumerLagHigh`/`WorkersConsumerMissing`'s
+own subject (backlog #21/#76) — and staying log-only is what keeps
+each of those signals isolated to what it's actually testing (Kafka
+delivery guarantees, consumer-lag-driven autoscaling), not entangled
+with a real domain feature's own latency/failure characteristics. See
+`workers/README.md`'s own "Deliberate, not a placeholder" section for
+the full reasoning. If a real domain feature for `workers` to own ever
+becomes a genuine need, it gets its own new consumer, not a retrofit
+onto this one.
