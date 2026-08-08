@@ -68,8 +68,8 @@ today; it is the map, not the territory.
  │  workload-generator (shaped synthetic   ┤  (keyed for api;  │          │
  │    demand, permanent) ──────────────────┘  CORS for visualizer)        │
 │                                                                          │
-│  OTel Collector, Prometheus + Alertmanager, Loki, Tempo,                │
-│  Pyroscope (continuous profiling) ─▶ Grafana                           │
+│  OTel Collector, Prometheus + Alertmanager, Loki, Tempo, Beyla (eBPF), │
+│  mimir (remote-write, monolithic), Pyroscope (profiling) ─▶ Grafana    │
 │                                                                          │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
@@ -177,7 +177,13 @@ PVC), scraped from `api`/`clinvar-service` (static targets) and `workers`
 (72h retention, 2Gi PVC). Grafana has Prometheus/Loki/Tempo pre-wired
 with the trace/log pivot, golden-signal dashboards per service, and real
 latency percentiles plus a real Kafka consumer-lag metric (backlog
-#21a). Alertmanager is live with an `ntfy.sh` notification channel and
+#21a). Prometheus also remote-writes to mimir (own monolithic-mode
+Deployment, hand-written manifests, ADR 0038) as a second, opt-in
+Grafana datasource — a real, completed experiment (backlog #108), not
+a dependency of anything else. Beyla runs as an eBPF auto-
+instrumentation DaemonSet (ADR 0036), plotted alongside `api`/
+`aggregator`/`workers`' own manual instrumentation on its own
+dashboard, not replacing it. Alertmanager is live with an `ntfy.sh` notification channel and
 SLO-backed alert rules — re-validated for real under sustained traffic
 (backlog #47, Done): the same two rules that didn't fire in the original
 chaos scenarios both fired unaided once #45's continuous traffic existed,
@@ -305,9 +311,6 @@ softened; the live description is at the top of this document.
 - Incident-response runbooks (#22) are partial — `docs/runbooks/` has
   the canary promote/abort runbook (#46) and the cross-repo rollout
   runbook, not yet one per alert rule as #22's own AC asks.
-- Mimir (long-term/multi-tenant metrics storage, backlog #18a) remains a
-  separate experiment not required for the single-node Prometheus
-  already live.
 
 ## Boundaries
 
