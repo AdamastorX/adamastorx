@@ -22,6 +22,13 @@ into one — don't force ceremony where it adds no value.
 - [ ] Change is scoped to one concern (one epic, one repo where possible).
 - [ ] Docs updated if behaviour, architecture, or operational procedure changed.
 - [ ] New tool/dependency? Write an ADR first (`docs/adr/`).
+- [ ] **New service?** Its AC names a golden-signal dashboard, an ADR 0020
+  SLO-table row, and any consumer-lag/staleness alert with a runbook — or
+  states explicitly why one doesn't apply (backlog #109; M13 shipped
+  without this line and paid for it, backlog #90/#111). A stated reason
+  goes in ADR 0020's own "Components without their own row" section (or
+  the dashboard file's own comment) so `scripts/check-roster-drift.sh`'s
+  grace-period check can find it the same way it finds a real row.
 
 ## Definition of Ready / Done
 

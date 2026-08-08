@@ -1,0 +1,4 @@
+# Fixture: deliberately does not name the synthetic fixture component
+# under test, and states no exemption for it either. Proves
+# check-roster-drift.sh fails a past-grace-period component with no
+# dashboard entry and no exemption (backlog #109).

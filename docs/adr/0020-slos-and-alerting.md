@@ -88,6 +88,28 @@ Error budgets and exact thresholds are set from each service's real
 current traffic/latency distribution once the histogram/lag metrics
 are live — not picked in the abstract in this ADR.
 
+### Components without their own row, and why (backlog #109)
+
+Not every live component gets an SLO row — a static frontend with no
+backend of its own has no golden signal of its own to measure, and
+forcing one would be inventing a metric nobody needs rather than
+naming a real gap. Stated explicitly, per component, rather than left
+as a silent omission `scripts/check-roster-drift.sh`'s own grace-period
+check (backlog #109) would otherwise have no way to distinguish from a
+real, unaddressed gap:
+
+- **`clinvar-viewer`, `visualizer`** — static frontends (plain
+  HTML/CSS/JS, no backend of their own), same shape as each other. No
+  server-side request rate/latency/error rate to measure; a real
+  frontend-observability answer (Grafana Faro, backlog #103) is a
+  different, not-yet-built signal, not a gap in this table.
+- **`workload-generator`** — synthetic traffic infrastructure
+  (backlog #45), not a service with its own user-facing SLO. Its own
+  health is a "does it publish and stay quiet" concern, not a golden
+  signal — `market_data_ticks_published_total`-shaped counters on the
+  services it calls already cover the real signal it exists to
+  exercise.
+
 ### Alerting mechanism
 
 - **Prometheus's own `serverFiles.alerting_rules.yml` values key, not a
