@@ -118,5 +118,18 @@ this migration a stated decision, not an overlap left to be discovered.
   - **ExternalDNS** — rejected as premature. No public DNS exists yet (ADR
     0004 deferred Let's Encrypt / public addressing deliberately); there is
     nothing for it to manage until that premise changes.
-</content>
-</invoke>
+
+## Addendum (2026-08-08, backlog #105): the HikariCP side named explicitly
+
+This ADR's own Context section already cited both real, chaos-scenario-found
+hangs as the motivating evidence for adopting the mesh (Kafka's `max.block.ms`,
+backlog #43, and HikariCP's connection-acquisition timeout,
+`observability/chaos/02-postgresql-unavailable.md`) — but backlog #105 (the
+HikariCP side's own tracking item, added later by ADR 0031) never got an
+explicit cross-reference back here. Recorded now, closing that loop: **yes,
+this ADR is the intended dataplane answer for both real hangs.** Neither
+#43 nor #105 needs an independent per-client fix (a shorter `max.block.ms`,
+a tuned HikariCP timeout) — both stay open, gated on M7 (backlog #104), and
+their own documented ~60s/~30s hangs become this ADR's real before/after
+evidence once Istio's timeout/circuit-breaking actually lands, not
+something to re-litigate as a separate decision now.
