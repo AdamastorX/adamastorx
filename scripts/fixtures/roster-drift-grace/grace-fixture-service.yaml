@@ -1,0 +1,11 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grace-fixture-service
+  namespace: argocd
+spec:
+  source:
+    repoURL: https://github.com/AdamastorX/platform
+    path: kubernetes/grace-fixture-service
+  destination:
+    namespace: grace-fixture-service

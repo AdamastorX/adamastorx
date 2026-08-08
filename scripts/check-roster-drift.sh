@@ -22,9 +22,24 @@ set -euo pipefail
 # excluded: this project's docs correctly refer to those by their
 # product name in prose, not by their lowercase Helm release name, so
 # requiring a literal-string match would be noise, not signal.
+#
+# backlog #109: a second, optional check -- a live component older
+# than a grace period should also be mentioned in the Grafana
+# dashboard file and in ADR 0020's SLO table, "closing the loop
+# instead of relying on the template alone" (that item's own AC). Same
+# "mentioned anywhere" mechanism as the overview.md check above, which
+# doubles as the exemption path: CONTRIBUTING.md's own new checklist
+# line asks a component with no real dashboard/SLO row to state why in
+# the same files (ADR 0020's "Components without their own row"
+# section; grafana.yaml's own top-of-file comment) -- a stated reason
+# is found by the exact same grep as a real entry, no separate
+# exemption list to maintain or let drift.
 
-PLATFORM_DIR="${1:?usage: check-roster-drift.sh <platform-repo-path> <overview.md-path>}"
-OVERVIEW_MD="${2:?usage: check-roster-drift.sh <platform-repo-path> <overview.md-path>}"
+PLATFORM_DIR="${1:?usage: check-roster-drift.sh <platform-repo-path> <overview.md-path> [<grafana.yaml-path> <adr-0020-path> <grace-days>]}"
+OVERVIEW_MD="${2:?usage: check-roster-drift.sh <platform-repo-path> <overview.md-path> [<grafana.yaml-path> <adr-0020-path> <grace-days>]}"
+GRAFANA_YAML="${3:-}"
+ADR_0020="${4:-}"
+GRACE_DAYS="${5:-14}"
 
 if ! command -v yq >/dev/null 2>&1; then
   echo "yq is required (https://github.com/mikefarah/yq)" >&2
@@ -54,11 +69,37 @@ for f in "${files[@]}"; do
     echo "::error file=${OVERVIEW_MD}::live component '${name}' (${f}) is not mentioned anywhere in overview.md" >&2
     fail=1
   fi
+
+  if [ -z "$GRAFANA_YAML" ] || [ -z "$ADR_0020" ]; then
+    continue
+  fi
+
+  # git log's own real first-commit timestamp for this file -- requires
+  # full history (fetch-depth: 0), not the shallow clone actions/checkout
+  # defaults to. A file with no history yet (just added, not committed)
+  # has nothing to check age against -- skip silently, the grace period
+  # exists precisely so a brand-new component isn't flagged instantly.
+  first_commit_epoch=$(git -C "$PLATFORM_DIR" log --follow --format=%ct -- "argocd/apps/$(basename "$f")" 2>/dev/null | tail -1 || true)
+  [ -z "$first_commit_epoch" ] && continue
+
+  age_days=$(( ($(date -u +%s) - first_commit_epoch) / 86400 ))
+  if [ "$age_days" -lt "$GRACE_DAYS" ]; then
+    continue
+  fi
+
+  if ! grep -qiF -- "$name" "$GRAFANA_YAML"; then
+    echo "::error file=${GRAFANA_YAML}::live component '${name}' has existed for ${age_days}d (past the ${GRACE_DAYS}d grace period) with no dashboard entry and no stated reason (backlog #109)" >&2
+    fail=1
+  fi
+  if ! grep -qiF -- "$name" "$ADR_0020"; then
+    echo "::error file=${ADR_0020}::live component '${name}' has existed for ${age_days}d (past the ${GRACE_DAYS}d grace period) with no SLO-table row and no stated reason (backlog #109)" >&2
+    fail=1
+  fi
 done
 
 if [ "$fail" -ne 0 ]; then
-  echo "One or more live components are missing from docs/architecture/overview.md (backlog #97a, recurrence of #83)." >&2
+  echo "One or more live components are missing from overview.md, or (past the grace period) from the dashboard/SLO surface with no stated reason (backlog #97a/#109)." >&2
   exit 1
 fi
 
-echo "Every live custom-service component is mentioned in docs/architecture/overview.md."
+echo "Every live custom-service component is mentioned in overview.md, and (where past the grace period) has a dashboard/SLO entry or a stated reason."

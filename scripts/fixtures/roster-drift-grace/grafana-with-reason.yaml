@@ -1,0 +1,3 @@
+# Fixture: grace-fixture-service is a synthetic fixture used only by
+# check-roster-drift.sh's own self-test, exempt from a real dashboard
+# entry (backlog #109).

@@ -47,8 +47,10 @@ jobs:
         run: python3 scripts/check_backlog_structure.py docs/roadmap/backlog.md
 
   # backlog #97(a): docs/architecture/overview.md roster drift against
-  # the platform repo's own live Application manifests. Same self-test
-  # bar as the structural check above.
+  # the platform repo's own live Application manifests. backlog #109
+  # extends the same script with an optional grace-period check against
+  # grafana.yaml and ADR 0020's SLO table, which needs platform's full
+  # git history (fetch-depth: 0) to compute each component's age.
   roster-drift:
     runs-on: ubuntu-latest
     steps:
@@ -60,6 +62,7 @@ jobs:
         with:
           repository: AdamastorX/platform
           path: platform
+          fetch-depth: 0
 
       - name: Install yq ${{ env.YQ_VERSION }}
         run: |
@@ -74,8 +77,30 @@ jobs:
             exit 1
           fi
 
-      - name: Check the real overview.md
-        run: bash adamastorx/scripts/check-roster-drift.sh platform adamastorx/docs/architecture/overview.md
+      - name: Self-test -- grace-period dashboard/SLO check must fail unmentioned, pass with a stated reason (backlog #109)
+        run: |
+          fixture_repo=$(mktemp -d)
+          mkdir -p "$fixture_repo/argocd/apps"
+          cp adamastorx/scripts/fixtures/roster-drift-grace/grace-fixture-service.yaml \
+            "$fixture_repo/argocd/apps/grace-fixture-service.yaml"
+          git -C "$fixture_repo" init -q
+          git -C "$fixture_repo" config user.email "ci@adamastorx"
+          git -C "$fixture_repo" config user.name "ci"
+          git -C "$fixture_repo" add -A
+          git -C "$fixture_repo" commit -q -m "add grace-fixture-service"
+
+          fx=adamastorx/scripts/fixtures/roster-drift-grace
+          if bash adamastorx/scripts/check-roster-drift.sh "$fixture_repo" "$fx/overview.md" "$fx/grafana-missing.yaml" "$fx/adr-missing.md" 0; then
+            echo "::error::checker did not fail when a past-grace-period component had no dashboard/SLO entry and no stated reason"
+            exit 1
+          fi
+
+          bash adamastorx/scripts/check-roster-drift.sh "$fixture_repo" "$fx/overview.md" "$fx/grafana-with-reason.yaml" "$fx/adr-with-reason.md" 0
+
+      - name: Check the real overview.md, dashboards, and SLO table
+        run: |
+          bash adamastorx/scripts/check-roster-drift.sh platform adamastorx/docs/architecture/overview.md \
+            platform/argocd/apps/grafana.yaml adamastorx/docs/adr/0020-slos-and-alerting.md
 
   ci:
     needs: [backlog-structure, roster-drift]
