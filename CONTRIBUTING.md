@@ -30,6 +30,18 @@ into one — don't force ceremony where it adds no value.
   the dashboard file's own comment) so `scripts/check-roster-drift.sh`'s
   grace-period check can find it the same way it finds a real row.
 
+## Dependency updates
+
+Renovate (self-hosted, `.github/workflows/renovate.yml`, one instance per
+repo using that repo's own `GITHUB_TOKEN` — backlog #98) opens PRs for
+Helm chart, Docker base image, GitHub Actions, Maven, and pip updates.
+Patch/pin/digest updates automerge once the repo's required checks pass;
+minor/major updates wait for manual review. The project owner shepherds
+that PR stream — reviewing minor/major bumps is a normal maintenance
+task, not a separate role. `observability` has no Renovate config: it
+carries no dependency-manager files (docs/runbooks only), so there's
+nothing for it to manage.
+
 ## Definition of Ready / Done
 
 See `.claude/PROJECT.md`.
