@@ -680,7 +680,7 @@ there; it is this milestone's first item).
 - Purpose: the three chaos fact packs and the ADR 0028 flame-graph reproduction are each ~90% of a publishable article, but text-only — producing the article today means re-running the incident to get the visuals. The review (D4) names this as the friction between "fact pack" and "published article", and the fix is a habit, not a tool.
 - Acceptance Criteria: the chaos-scenario AC template (observability repo) gains "capture 2–3 images into `docs/assets/` at incident time" as a standing step; retroactive capture done for the three existing fact packs (the alert-firing windows under #45 traffic are reproducible) and the #57 flame graph; each fact pack/runbook links its images.
 - Dependencies: none.
-- Priority: P2. Labels: `documentation`, `observability`.
+- Priority: P2. Labels: `documentation`, `observability`. **Partially done (2026-08-09, observability#27)** — the habit fix is real and shipped: a standing step in the `observability-engineer` persona and `chaos/README.md`, capture 2-3 images into `docs/assets/` at incident time, not after. **Retroactive capture for the 3 existing fact packs and the #57 flame graph is a real, stated gap, not attempted or faked**: checked live before deciding this — this environment has no browser and no server-side image-rendering path (Grafana has no image-renderer plugin installed; Pyroscope's own `/pyroscope/render` API returns only flamebearer JSON, rendered client-side by its React UI, confirmed by querying it directly). Left open for the owner to capture directly, or a future session with browser access — the habit fix means this gap can't recur for any new chaos scenario, even while the backlog of existing ones stays unfilled.
 
 ---
 
