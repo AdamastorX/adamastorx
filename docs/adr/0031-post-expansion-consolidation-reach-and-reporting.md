@@ -144,3 +144,16 @@ API-key labels and internal hostnames.
 - The article pipeline this ADR exists to serve has its first six topics
   pre-evidenced in-repo (review §D6); M14/M15 each add their own fact
   packs on top.
+
+## Addendum (2026-08-09): "M12 stays gated on M7" now means blocked-on-hardware, no date
+
+Decision §5 above ("What does not change") states plainly: "M12 stays
+gated on M7." A live capacity re-measurement
+(`docs/reviews/2026-08-09-hardware-constrained-strategy.md`) found the
+planned M7 multi-node substrate does not fit this machine at any trim
+level and closed as superseded (ADR 0035's addendum, the new ADR 0040) —
+so that gate now means **blocked-on-hardware, with no date**, not blocked
+behind the dead VM interim plan ADR 0035 originally named. M12 is not
+cancelled, the same way M11 (§3 above) is not cancelled by being
+sequenced later — see ADR 0040 for the rescope and the real dedicated-host
+trigger M12 now actually waits on.

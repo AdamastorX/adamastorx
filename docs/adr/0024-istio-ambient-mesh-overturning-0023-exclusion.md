@@ -1,6 +1,6 @@
 # 0024. Adopt Istio (ambient mesh) for mTLS and traffic control, overturning ADR 0023's service-mesh exclusion
 
-Status: Proposed
+Status: Deferred (blocked on hardware) — see the 2026-08-09 addendum below
 
 ## Context
 
@@ -34,9 +34,15 @@ by something 0023 did not weigh, not by disagreeing with what it did weigh.
    easy version of this problem and priced the mesh against it.
 
 2. **"mTLS between four pods secures nothing against a real threat."** The
-   reason to want it here is not the threat model — it is that **ADR 0010
-   states plainly "no auth between in-cluster services" as a deliberate
-   simplification**, and nothing has revisited that since. Closing a
+   reason to want it here is not the threat model — it is that **every
+   in-cluster call is unauthenticated plaintext, a gap this project has
+   stated in writing (ADR 0012 records Kafka as "(PLAINTEXT, no auth)")**,
+   and nothing has closed it since. (Corrected 2026-08-09: this bullet
+   originally cited ADR 0010 for "no auth between in-cluster services" —
+   that phrase does not appear in ADR 0010, whose actual subject is
+   gateway routing, a component ADR 0021 later removed. ADR 0012's Kafka
+   line is the real in-repo statement of the gap; see the addendum below.)
+   Closing a
    gap the project stated in writing and then learning the pattern that
    closes it is squarely this project's content goal (ADR 0022); in ambient
    mode mTLS is close to free once the mesh is present, so the objection
@@ -133,3 +139,45 @@ a tuned HikariCP timeout) — both stay open, gated on M7 (backlog #104), and
 their own documented ~60s/~30s hangs become this ADR's real before/after
 evidence once Istio's timeout/circuit-breaking actually lands, not
 something to re-litigate as a separate decision now.
+
+## Addendum (2026-08-09): deferred, blocked on hardware — this ADR's 2026-08-08 addendum is reversed by ADR 0040
+
+A live capacity re-measurement
+(`docs/reviews/2026-08-09-hardware-constrained-strategy.md`) found istiod's
+500m/2048Mi plus ztunnel's 200m/512Mi per node is roughly ten times this
+machine's entire remaining CPU headroom, for a cluster of ~8 application
+services. This ADR's status is now **Deferred (blocked on hardware)** for
+the mesh approach itself — not rejected on its own merits, which are
+unchanged, but priced against a real ceiling this ADR did not have when it
+made its case.
+
+**The 2026-08-08 addendum immediately above is reversed by the new ADR
+0040.** That addendum parked #43 and #105 explicitly: "neither #43 nor
+#105 gets an independent per-client fix... both stay open, gated on M7."
+ADR 0040 un-defers both — with the mesh track (backlog #59–#62) superseded
+on capacity grounds, ADR 0023's original position is no longer the
+argument this ADR's Context §1 beat; it is the only answer that fits the
+machine. #43 gets a stated timeout budget on `api`'s Kafka producer
+`max.block.ms`; #105 gets a tuned HikariCP `connectionTimeout` plus a
+Resilience4j circuit breaker on `api`'s outbound `clinvar-service` call.
+Java/`api` only, for now — the "same problem in two languages" cost this
+ADR's Context §1 originally priced the mesh against is deferred until a
+Python-side hang is actually documented, since only `api`'s hangs are
+documented today.
+
+**The mTLS gap this ADR exists to close stays real and open**, named
+explicitly as a future mesh benefit "when hardware exists" (ADR 0040 §4)
+rather than closed or quietly dropped — ADR 0023's original threat-model
+point (mTLS between pods on one physically-owned host defends
+approximately nothing against this project's actual threat model) stands
+in the meantime.
+
+**Citation correction (§Context, bullet 2, corrected inline above):** this
+ADR and backlog #59 both originally quoted ADR 0010 as stating "no auth
+between in-cluster services." Grepped directly while writing this
+addendum: that phrase does not appear in ADR 0010, whose actual subject is
+gateway routing — a component ADR 0021 later removed. The real in-repo
+statement of the gap is ADR 0012's "(PLAINTEXT, no auth)" for Kafka. The
+gap itself — unauthenticated plaintext in-cluster traffic — is real and
+unchanged by this correction; only the citation was loose, propagated
+twice before being caught here.

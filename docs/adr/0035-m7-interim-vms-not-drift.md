@@ -68,3 +68,52 @@ becomes available for the first time, not before.
   time — this ADR does not need to be revisited or reversed for that
   to happen; the VM interim and a later hardware move are additive,
   not competing.
+
+## Addendum (2026-08-09): falsified by a real capacity measurement — the interim-VM decision does not fit this machine
+
+This decision was made before the capacity math existed to check it
+against. A live re-measurement
+(`docs/reviews/2026-08-09-hardware-constrained-strategy.md`) found: this
+node's CPU requests already sit at 93% of its 4000m allocatable (3745m),
+and those 4 "vCPUs" are 4 hyperthreads on a 2-physical-core i7-6600U —
+not 4 independent execution units. The real cost of the interim VM path
+plus the Cilium/Istio tracks it was meant to unblock — Cilium agent
+(~100m/512Mi), Istio ztunnel (~200m/512Mi), istiod (500m/2048Mi, a real,
+uncommented chart default), plus the VM's own OS/kubelet/containerd
+overhead (~300m/~750Mi, estimated) — totals roughly **+1550m CPU /
++5.2Gi RAM before any workload is scheduled onto the new node for actual
+work**: against today's 3745m already requested, that is **~5295m
+against a 4000m ceiling, about 132% of the machine** (the conclusion
+survives its own error bars: with the VM overhead estimate set to zero,
+the charts alone are ~+1200m, ~124%). Even the maximally-trimmed,
+Cilium-only, no-Istio variant this ADR's own #48 pre-flight gate
+anticipated was checked and still fails, on RAM specifically: a VM's
+memory is a reserved carve-out, not a schedulable promise, and this host
+was already 5.1Gi into 8Gi of swap with the IDE and browser running
+before any VM's carve-out is taken.
+
+The deeper point is not arithmetic but physics: **a VM does not add
+cores.** It re-partitions the same 4 hyperthreads on the same 2 physical
+cores this single node already saturates. Total real demand across "the
+cluster" can never exceed what this one physical machine has, no matter
+how many virtual nodes divide it.
+
+**No VM agents run on this laptop.** Backlog #48 closes as **superseded**,
+not Done — the interim-VM decision recorded above is falsified by this
+measurement, not merely deprioritized. What #48/#49–#52 were sequenced to
+unblock is not abandoned: the new **ADR 0040** records where M7 goes
+instead — Cilium/Hubble/NetworkPolicies unbundled from multi-node and
+executed on one node via a deliberate, rehearsed full-cluster rebuild
+(a CNI swap needs a rebuild either way, with or without a second node);
+#51/#52 (which genuinely need a second node — cross-node reschedule,
+node-loss/drain) re-labeled **Blocked (hardware)**, honestly, rather than
+faked or deleted; and the Istio ambient-mesh track deferred/superseded
+in favor of app-level fail-fast, per ADR 0040 and ADR 0024's own
+addendum.
+
+This addendum does not reverse this ADR's own reasoning about *why* an
+interim was worth naming instead of an indefinite wait ("blocked
+indefinitely is how a solo lab actually stalls" — that judgement stands).
+It reverses the *specific path chosen*, on a measurement that did not
+exist when this ADR was written. The single-node path this ADR already
+kept as a Terraform variable (Consequences, above) is what stays real.
