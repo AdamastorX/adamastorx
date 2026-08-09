@@ -12,9 +12,15 @@ multi-node/Cilium/Istio substrate, M11's SRE agent, and M12's reopened
 bioinformatics milestone — real, ADR-recorded decisions (0023-0028)
 gated on a hardware move this project hasn't made. M14/M15 (ADR 0031,
 post-expansion consolidation: reach/packaging, then observability
-completeness) are scoped in the roadmap, not started. The diagram below
-shows the current shape, with a note underneath marking what exists
-today; it is the map, not the territory.
+completeness) are underway, not unstarted: M14's #31 has been Done since
+2026-08-06 (`WHY.md`, PR #89) and #89 is partially done (retroactive
+asset capture for existing fact packs is a stated, open gap); M15 is
+closed on the large majority of its items (`docs/roadmap/backlog.md`,
+§M15) — #94 (retention/SLO report, blocked on a declined PVC resize)
+and #101 (VPA, deliberately sequenced last) remain open by explicit
+choice, not oversight. The diagram below shows the current shape, with a
+note underneath marking what exists today; it is the map, not the
+territory.
 
 ## Shape of the system
 
@@ -141,15 +147,16 @@ metric is self-reported by the consumer's own JVM and goes dark exactly
 when the consumer is fully stopped). KEDA reacts at `lagThreshold: 50`,
 an order of magnitude below the `WorkersConsumerLagHigh` alert's `500`/
 `10m`, which stays as the backstop for when autoscaling alone can't fix
-it. Scale-to-zero is evaluated and deliberately **not** used
-(`minReplicaCount: 1`) — there's no `kube-state-metrics` on this cluster
-to distinguish an intentional KEDA scale-to-zero from a real stuck
-consumer for the `WorkersConsumerMissing` alert (backlog #76), a stated
-follow-up rather than something shipped broken. Proven live: a real
-~2,600-request burst drove lag to 150, KEDA correctly computed and
-requested 3 replicas (only 1 actually scheduled — see the CPU-headroom
-note below), and the running replica alone drained the backlog to zero
-lag within ~90s.
+it. Scale-to-zero is now adopted (`minReplicaCount: 0`, backlog #113,
+2026-08-09) — kube-state-metrics (enabled cluster-wide since backlog
+#92) supplies `kube_deployment_status_replicas{deployment="workers"} >
+0`, gating `WorkersConsumerMissing` alongside its existing `absent(...)`
+clause so a real KEDA scale-to-zero can't be mistaken for a stuck
+consumer, closing the exact follow-up backlog #76 originally deferred.
+Proven live: a real ~2,600-request burst drove lag to 150, KEDA correctly
+computed and requested 3 replicas (only 1 actually scheduled — see the
+CPU-headroom note below), and the running replica alone drained the
+backlog to zero lag within ~90s.
 
 **Known gap:** Kafka's own memory limit was raised 768Mi→1536Mi
 (backlog #75) after a real, timestamp-aligned OOMKill during a consumer-
@@ -171,8 +178,11 @@ full M13 deploy, per backlog #87's own last check).
 **Observability (four pillars):** `api`/`workers` export traces via
 Micrometer Tracing + OTLP to an OpenTelemetry Collector (ADR 0013) into
 Tempo (72h retention, 2Gi PVC). Metrics flow via Boot actuator/
-`prometheus_client` into a plain Prometheus chart (3-day retention, 2Gi
-PVC), scraped from `api`/`clinvar-service` (static targets) and `workers`
+`prometheus_client` into a plain Prometheus chart (30-day retention since
+backlog #94; PVC is 16Gi in git but still 2Gi live — `local-path` needs a
+delete+recreate to actually grow, and the owner has so far declined it,
+leaving the `prometheus` Application persistently `OutOfSync`, backlog
+#118), scraped from `api`/`clinvar-service` (static targets) and `workers`
 (pod-role service discovery). Logs are shipped by Alloy into Loki
 (72h retention, 2Gi PVC). Grafana has Prometheus/Loki/Tempo pre-wired
 with the trace/log pivot, golden-signal dashboards per service, and real

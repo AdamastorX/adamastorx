@@ -53,3 +53,19 @@ about.
 - The services placeholder means a green check on `services` PRs carries
   no information until M2 replaces it. Accepted as the honest reading of
   "a workflow runs on PR" while there is nothing to run.
+
+## Addendum (2026-08-09, backlog #97): the "`adamastorx` gets no CI" call reversed
+
+`adamastorx` grew something executable that CI could actually catch —
+`docs/roadmap/backlog.md`'s numbering integrity and
+`docs/architecture/overview.md`'s roster drift, the exact structural
+corruption classes #87/#79/#83 each hit for real. `adamastorx#102`
+(backlog #97) added `adamastorx`'s first `.github/workflows/ci.yml`, one
+`ci` aggregator job over `backlog-structure` + `roster-drift`, keeping
+this ADR's "one stable required check named `ci`" contract rather than
+inventing a new shape. The original "docs plus one manually-run bootstrap
+script break nothing when wrong" reasoning above is superseded for this
+repo, not wrong for the state it described at the time. Branch protection
+requiring that `ci` check on `adamastorx`'s `main` is tracked separately
+(backlog #116) — the workflow existing and the check being required are
+two different facts, and only the first was true until this addendum.
