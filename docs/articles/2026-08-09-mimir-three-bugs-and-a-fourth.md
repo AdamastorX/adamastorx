@@ -92,4 +92,4 @@ And it's still running. A hardware-constrained strategy review I commissioned on
 
 ---
 
-*Real evidence, for anyone who wants to check any of this rather than take my word for it: the deployment decision and honest cost/benefit write-up are in ADR 0038; the three initial bugs and the fourth's first sighting are recorded in backlog item #108; the incident and its four-attempt fix sequence are three real, sequential pull requests against this cluster's GitOps repo, each reviewed before merge, each correcting a real mistake in the one before it.*
+*Real evidence, for anyone who wants to check any of this rather than take my word for it: the deployment decision and honest cost/benefit write-up are in ADR 0038; the three initial bugs and the fourth's first sighting are recorded in backlog item #108; the incident and its four-draft fix sequence are three real, sequential pull requests against this cluster's GitOps repo, each reviewed before merge, each one correcting a real mistake found either live on the cluster or by that review.*
