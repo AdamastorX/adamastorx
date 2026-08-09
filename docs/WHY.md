@@ -80,7 +80,7 @@ pivot is the point, and pivots need the "before" to mean anything.
 | M4 Reliability | The system can be *operated*, not just run — SLOs, alerting, and runbooks that a real on-call human could follow. |
 | M5 Clinical Variant Annotation | A genuinely skewed, invalidation-on-write cache pattern exists alongside the original TTL-only one — a real before/after, not a relabeled demo. |
 | M6 Real Demand and Progressive Delivery | Deploys become canaries gated on SLOs that continuous, shaped traffic finally makes real — no more idle-cluster theater. |
-| M7 Multi-Node Substrate | *(gated on a hardware move, not yet built)* — a real multi-node cluster with Cilium/Hubble, this project's first NetworkPolicies, and node-loss exercises one node structurally cannot produce. |
+| M7 Multi-Node Substrate | *(rescoped 2026-08-09, ADR 0040)* — a real capacity measurement showed the planned multi-node move doesn't fit this machine. Cilium/Hubble and this project's first NetworkPolicies proceed on **one node** via a deliberate cluster rebuild; the multi-node substrate itself (replicated storage, node-drain/rolling-upgrade exercises, the Istio ambient mesh) stays *blocked-on-hardware, no date* — honestly labeled, not faked on one node. |
 | M8 Delivery Semantics and Stream State | New operational shapes the project genuinely lacked — guaranteed fan-out, async job orchestration, stateful stream processing — chosen for the shape, not the buzzword. |
 | M9 New Signal Classes | Continuous profiling and admission-time policy, each justified by an incident that already happened, not spec'd ahead of need. |
 | M10 Platform Automation | Autoscaling, chaos, and cost visibility earn their place once load is real and workloads are diverse enough to need them. |

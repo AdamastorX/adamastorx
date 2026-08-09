@@ -107,4 +107,16 @@ platform behaviour around running them is.
 - This is a **new milestone number**, not a resurrected M6 — M6 is now
   "Real Demand and Progressive Delivery" (ADR 0022). Reusing the number
   would falsely imply the old scope; the changed goal gets a fresh slot.
+
+## Addendum (2026-08-09): "gated on M7" now means blocked-on-hardware, no date
+
+A live capacity re-measurement
+(`docs/reviews/2026-08-09-hardware-constrained-strategy.md`) found the
+planned M7 multi-node substrate does not fit this machine at any trim
+level and closed as superseded (ADR 0035's addendum, the new ADR 0040) —
+so this milestone's "lands after M7's multi-node/replicated-storage
+substrate" (Consequences, above) now means **blocked-on-hardware, with no
+date**, not blocked behind a named interim plan. See ADR 0040 for the
+rescope and the real dedicated-host trigger this milestone now actually
+waits on.
 </content>

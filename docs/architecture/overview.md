@@ -7,20 +7,30 @@ async-job-control-plane items are done and live, M9's continuous profiling
 is done and live, M10's autoscaling is done and live, and **M13's
 market-sentiment pipeline (ADR 0029) is done and live since 2026-08-04**
 (all five services, built under an explicit owner override of the M7
-gate — see backlog's M13 section). Still **not yet built**: M7's
-multi-node/Cilium/Istio substrate, M11's SRE agent, and M12's reopened
-bioinformatics milestone — real, ADR-recorded decisions (0023-0028)
-gated on a hardware move this project hasn't made. M14/M15 (ADR 0031,
+gate — see backlog's M13 section). **M7 was rescoped 2026-08-09 (ADR
+0040)**: a live capacity measurement (93% of this node's 4000m CPU
+requests already committed, on 4 hyperthreads/2 physical cores) found the
+planned multi-node move doesn't fit this machine — backlog #48 closed as
+superseded, not Done. Cilium/Hubble and the project's first
+NetworkPolicies (#49/#50) proceed on **one node** via a deliberate
+cluster rebuild instead; the multi-node substrate itself (replicated
+storage #51, node-drain/rolling-upgrade drills #52) and the Istio ambient
+mesh (#59-#62, superseded by app-level fail-fast, #43/#105) stay
+**blocked-on-hardware, no date** — real, ADR-recorded decisions
+(0023/0025/0035/0040) honestly labeled rather than faked on one node or
+silently dropped. Still **not yet built**, same reason: M11's SRE agent
+and M12's reopened bioinformatics milestone. M14/M15 (ADR 0031,
 post-expansion consolidation: reach/packaging, then observability
 completeness) are underway, not unstarted: M14's #31 has been Done since
 2026-08-06 (`WHY.md`, PR #89) and #89 is partially done (retroactive
 asset capture for existing fact packs is a stated, open gap); M15 is
 closed on the large majority of its items (`docs/roadmap/backlog.md`,
-§M15) — #94 (retention/SLO report, blocked on a declined PVC resize)
-and #101 (VPA, deliberately sequenced last) remain open by explicit
-choice, not oversight. The diagram below shows the current shape, with a
-note underneath marking what exists today; it is the map, not the
-territory.
+§M15) — #94 (retention/SLO report; the PVC was recreated 2026-08-09 with
+zero data loss, so the report itself is the only remaining open part, on
+its own ~30-day clock) and #101 (VPA, deliberately sequenced last) remain
+open by explicit choice, not oversight. The diagram below shows the
+current shape, with a note underneath marking what exists today; it is
+the map, not the territory.
 
 ## Shape of the system
 
@@ -173,16 +183,23 @@ headroom is real but finite — it was the stated reason M13 was originally
 gated on the M7 hardware move, until the owner explicitly overrode that
 gate (2026-08-02) and M13 was built here anyway, incrementally, with a
 fresh headroom check before each service's sync (83% requested after the
-full M13 deploy, per backlog #87's own last check).
+full M13 deploy, per backlog #87's own last check). A live re-measurement
+(2026-08-09, `docs/reviews/2026-08-09-hardware-constrained-strategy.md`)
+found the same headroom now at 93% requested, and used that finding to
+rescope M7 itself (ADR 0040) rather than the multi-node hardware move
+this headroom-tightness was originally expected to be relieved by.
 
 **Observability (four pillars):** `api`/`workers` export traces via
 Micrometer Tracing + OTLP to an OpenTelemetry Collector (ADR 0013) into
 Tempo (72h retention, 2Gi PVC). Metrics flow via Boot actuator/
 `prometheus_client` into a plain Prometheus chart (30-day retention since
-backlog #94; PVC is 16Gi in git but still 2Gi live — `local-path` needs a
-delete+recreate to actually grow, and the owner has so far declined it,
-leaving the `prometheus` Application persistently `OutOfSync`, backlog
-#118), scraped from `api`/`clinvar-service` (static targets) and `workers`
+backlog #94; PVC is 16Gi, real and live — `local-path` doesn't support
+in-place expansion, so the 2Gi PVC was recreated 2026-08-09 via a real
+delete+recreate with the TSDB data copied out and back in, zero data
+loss, retained history confirmed intact back to ~4 days via real
+`/api/v1/query` offsets — the `prometheus` Application is `Synced`/
+`Healthy`, closing the `OutOfSync` gap backlog #118's alert was built to
+catch), scraped from `api`/`clinvar-service` (static targets) and `workers`
 (pod-role service discovery). Logs are shipped by Alloy into Loki
 (72h retention, 2Gi PVC). Grafana has Prometheus/Loki/Tempo pre-wired
 with the trace/log pivot, golden-signal dashboards per service, and real
@@ -284,10 +301,13 @@ hostname specifically so its own traffic is subject to the same edge
 auth/rate-limit enforcement as everything else. Both carry their own
 per-tenant API key via the same out-of-band Secret mechanism.
 
-**Not yet:** the expansion phase's remaining milestones are real,
+**Not yet:** most of the expansion phase's remaining milestones are real,
 ADR-recorded decisions that have **not been built**, not silent gaps —
-each is gated on a dedicated-desktop hardware move (M7) this project
-hasn't made yet.
+each is blocked-on-hardware, no date, per ADR 0040's 2026-08-09 rescope
+(a live capacity measurement, not a wait for dedicated hardware that has
+no committed timeline). M7 itself is the exception: its network-dataplane
+half (Cilium/Hubble/NetworkPolicies) no longer waits on hardware at all —
+see below.
 
 *Correction record:* M13 was listed below as unbuilt until 2026-08-06,
 two days after it went live — the third recurrence of drift on this
@@ -295,25 +315,42 @@ file, and the reason backlog #97 replaces process with a CI check. It is
 not in the list any more because it is done, not because the claim was
 softened; the live description is at the top of this document.
 
-- **M7 Multi-Node Substrate**: a multi-node k3s rebuild, **Cilium**
+- **M7 Multi-Node Substrate — rescoped 2026-08-09 (ADR 0040)**: a live
+  capacity measurement (`docs/reviews/2026-08-09-hardware-constrained-
+  strategy.md`) found this node's CPU requests already at 93% of its
+  4000m allocatable — 4 hyperthreads on a 2-physical-core i7-6600U, not 4
+  independent cores — which does not fit a second VM node plus Cilium and
+  Istio's real combined overhead (~132% of the machine, by the review's
+  own measured arithmetic) at any trim level. Backlog #48 (the interim VM
+  path, ADR 0035) closed as **superseded, not Done**. What survives,
+  unbundled from multi-node and executed on **one node** instead: **Cilium**
   replacing flannel with Hubble flow observability (ADR 0023) and the
-  project's first NetworkPolicies, an **Istio ambient mesh** layered on
-  afterward for mTLS and traffic-control/circuit-breaking (ADR 0024),
-  replicated storage, and node-drain/rolling-upgrade exercises. Backlog
-  #23a (backup/restore) is a hard prerequisite and is **Done** as of
-  2026-08-04 (platform#62, ADR 0030) — a real restore drill with a
-  measured RTO, on-node only, with single-disk loss accepted explicitly
-  (backlog #99 converts that acceptance into a real off-site copy).
-  **Neither Cilium nor Istio is deployed anywhere in this cluster today**
-  — both remain on `.claude/PROJECT.md`'s approved list only via their
-  respective ADRs, not as running components.
+  project's first NetworkPolicies (#49/#50), via a deliberate, rehearsed
+  full-cluster rebuild — a CNI swap needs one either way, with or without
+  a second node. Backlog #23a (backup/restore) is a hard prerequisite and
+  is **Done** as of 2026-08-04 (platform#62, ADR 0030) — a real restore
+  drill with a measured RTO, on-node only, with single-disk loss accepted
+  explicitly (backlog #99 converts that acceptance into a real off-site
+  copy). **Neither Cilium nor Istio is deployed anywhere in this cluster
+  today** — Cilium remains queued behind the rebuild above; the **Istio
+  ambient mesh is superseded, not deferred** (backlog #59-#62), replaced
+  by app-level fail-fast (#43/#105, un-deferred: a timeout budget on
+  `api`'s Kafka producer `max.block.ms` and a Resilience4j circuit
+  breaker on its outbound `clinvar-service` call) — istiod alone
+  (500m/2048Mi) is roughly ten times this machine's real remaining
+  headroom. **Replicated storage (#51) and node-drain/rolling-upgrade
+  drills (#52) stay Blocked (hardware), honestly** — both are
+  definitionally impossible on one node (nowhere to reschedule to,
+  nothing to drain to), not faked or deleted.
 - **M11 AI-Assisted SRE** — an `sre-agent` over the project's own
   telemetry; not started.
 - **M12 Bioinformatics Workloads (reopened, ADR 0025)** — `metadata-
   service`, MinIO, a real Nextflow pipeline engine, a saga-shaped Kafka
   lifecycle, `notification-service`, real licensed public datasets
-  (1000 Genomes/TCGA/GEO/TCIA); gated on M7's storage substrate. None of
-  its services (#67-#72) exist yet.
+  (1000 Genomes/TCGA/GEO/TCIA); blocked-on-hardware, no date, per ADR
+  0040/ADR 0025's addendum — the storage substrate it needs is part of
+  the same rescoped multi-node work above. None of its services (#67-#72)
+  exist yet.
 - Admission-time policy enforcement (Kyverno/Gatekeeper, backlog #58),
   Chaos Mesh formalizing the existing manual chaos exercises (#64), and
   Kubecost cost visibility priced against real owned-hardware TCO (#65)

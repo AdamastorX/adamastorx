@@ -175,3 +175,16 @@ reaching the same conclusion, not a copy-pasted one.
 - This is a **new milestone number (M13)**, not a resurrection of any
   closed one — it shares no scope with M6 (#30, closed) or M12 (bio
   domain); the number is new because the domain and the reasoning are.
+
+## Addendum (2026-08-09): the FinBERT-v2 trigger now means blocked-on-hardware, no date
+
+Decision §3 above deferred a FinBERT-style transformer upgrade "once M7's
+dedicated hardware exists and idle capacity is actually measured against
+it." A live capacity re-measurement
+(`docs/reviews/2026-08-09-hardware-constrained-strategy.md`) found the
+planned M7 multi-node substrate does not fit this machine at any trim
+level and closed as superseded (ADR 0035's addendum, the new ADR 0040) —
+so that trigger now means **blocked-on-hardware, with no date**, not
+blocked behind the dead VM interim plan. VADER stays the v1 (and, for now,
+only) sentiment scorer; the FinBERT-v2 upgrade references ADR 0040 and the
+real dedicated-host trigger going forward.
