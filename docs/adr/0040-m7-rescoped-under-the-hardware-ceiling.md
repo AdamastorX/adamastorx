@@ -47,9 +47,10 @@ recover from, with no second node to retreat to. That runbook must include
 an explicit ownership-repair step for any `hostPath`/`local-path`-backed
 PVC restore: a real 2026-08-09 incident (backlog #94's own status note)
 found that the kubelet does not apply `fsGroup` to `hostPath`-backed
-volumes, so a restore performed by a root-context temporary pod silently
-leaves data unreadable/unwritable by a workload's real `runAsUser` —
-caught only after a live `CrashLoopBackOff`, not before. What a single node
+volumes, so a restore performed by a temporary pod running under any uid
+other than the target workload's own silently leaves data unreadable/
+unwritable by that workload's real `runAsUser` — caught only after a live
+`CrashLoopBackOff`, not before. What a single node
 genuinely cannot show (cross-node routing, WireGuard node-to-node
 encryption, multi-node identity propagation) is real but small, and stated
 rather than glossed. The rebuild itself is treated as a first-class fact
