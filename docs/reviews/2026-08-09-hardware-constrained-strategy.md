@@ -43,7 +43,7 @@ The single k3s node's CPU requests sit at **3745m of 4000m allocatable —
 93%**, leaving ~255m of schedulable headroom. The host itself — which is
 also the operator's daily driver — shows **5.1Gi of 8Gi swap in use** and
 ~7.7Gi genuinely available RAM (`free -h`), with real usage at 2223m CPU /
-11.2Gi memory (`kubectl top node`). Roughly 30 real components run on this
+10.9Gi memory (`kubectl top node`). Roughly 30 real components run on this
 today.
 
 Against that, the real cost of #48/#49/#59–#62 as planned (one additional
@@ -56,6 +56,7 @@ Cilium+Hubble and Istio-ambient tracks), from the actual charts:
 | Istio ztunnel, per node ×2 | 200m / 512Mi each (real chart default) |
 | Istio istiod | **500m / 2048Mi** (real chart default) |
 | VM's own OS/kubelet/containerd | ~300m / ~750Mi (estimate, stated as such) |
+| Cilium operator + Hubble relay/UI | ~150m / ~0.5Gi (estimate, stated as such; see §3a) |
 
 Total: roughly **+1550m CPU / +5.2Gi RAM** before any workload is
 scheduled onto the new node for actual work. Added to today's 3745m:
@@ -161,7 +162,7 @@ clients" — is no longer the argument the mesh beat; it is the only answer
 that fits.
 
 So: un-defer the per-client fix that ADR 0024's addendum explicitly parked
-("neither #43 nor #105 gets an independent per-client fix... both stay
+("neither #43 nor #105 needs an independent per-client fix... both stay
 open, gated on M7"). Concretely: a stated timeout budget well under the
 current 30–60s hangs — `max.block.ms` tuned on `api`'s Kafka producer,
 HikariCP `connectionTimeout` tuned with a fail-fast path, and a
@@ -492,7 +493,8 @@ from that pass, including corrections to this review's own inputs:
    rescoped/substituted/blocked per §3; #67–#72 (M12) per §7.5/§8;
    #78/#79 were already Done under the owner's M13 override; the one
    remainder is **#65 (Kubecost)**, whose #48 dependency was always the
-   soft one ("gains value once M12's workload diversity exists") — its
+   soft one (paraphrased: becomes genuinely useful once M12's real
+   workload diversity exists) — its
    disposition is: dependency rewritten to that real question, stays P2,
    not picked up this stretch (another always-on component is the wrong
    purchase on a capacity-bound node). Also looked for any prior ADR whose
