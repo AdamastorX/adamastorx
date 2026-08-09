@@ -43,7 +43,14 @@ says this explicitly). That reasoning now runs in reverse: the rebuild is
 the only remaining cost, and it is payable on one node. A flannel-restore
 runbook is written and rehearsed **before** the rebuild is attempted, not
 after — a broken CNI on the only node is the one failure ArgoCD cannot
-recover from, with no second node to retreat to. What a single node
+recover from, with no second node to retreat to. That runbook must include
+an explicit ownership-repair step for any `hostPath`/`local-path`-backed
+PVC restore: a real 2026-08-09 incident (backlog #94's own status note)
+found that the kubelet does not apply `fsGroup` to `hostPath`-backed
+volumes, so a restore performed by a temporary pod running under any uid
+other than the target workload's own silently leaves data unreadable/
+unwritable by that workload's real `runAsUser` — caught only after a live
+`CrashLoopBackOff`, not before. What a single node
 genuinely cannot show (cross-node routing, WireGuard node-to-node
 encryption, multi-node identity propagation) is real but small, and stated
 rather than glossed. The rebuild itself is treated as a first-class fact
