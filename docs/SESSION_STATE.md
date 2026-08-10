@@ -13,10 +13,10 @@ Last updated: 2026-08-10.
 **Backlog #49 (Cilium/Hubble, replacing flannel) and #50 (first
 NetworkPolicies) are both Done and live, 2026-08-10** — the day's major
 work: a real, live, deliberate single-node cluster rebuild, followed by
-6 real `CiliumNetworkPolicy` batches (`clinvar`/`api`/`workers`/`alloy`/
-`prometheus`, plus two ingress-enforcement follow-up fixes found and
-applied during the closure itself) across `platform`#148–#162 and
-`adamastorx`#239–#249. `docs/roadmap/backlog.md`'s own #49/#50 entries
+5 real `CiliumNetworkPolicy` batches (`clinvar`/`api`/`workers`/`alloy`/
+`prometheus`), plus two ingress-enforcement follow-up fixes found and
+applied during the closure itself (`alloy`, `alertmanager`) — across
+`platform`#148–#162 and `adamastorx`#239–#249. `docs/roadmap/backlog.md`'s own #49/#50 entries
 and `docs/architecture/overview.md`'s "Network dataplane" section have
 the full, real account (including a genuine production incident and its
 root cause) — this section only keeps the gremlins worth knowing before
@@ -64,8 +64,10 @@ belongs here more than duplicated into the permanent record.
 
 ## Where to look next
 
-- No open PRs or in-flight work as of this update — #49/#50 closed
-  clean, nothing left mid-flight.
+- #49/#50 themselves closed clean, nothing left mid-flight on that
+  work specifically — check `gh pr list --repo AdamastorX/adamastorx`/
+  `--repo AdamastorX/platform` for whatever's actually open right now,
+  since this line goes stale the moment a new PR opens.
 - `docs/roadmap/backlog.md` is the live source of truth for what's open
   next (currently #1–#121, structural integrity enforced by
   `scripts/check_backlog_structure.py` and CI's `backlog-structure`
