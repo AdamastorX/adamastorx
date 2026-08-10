@@ -6,354 +6,76 @@ threads, and things the next session shouldn't have to re-discover the
 hard way. Prune/rewrite freely as work completes; this file describes
 *current* state, not history (git history is the record of the past).
 
-Last updated: 2026-08-04.
+Last updated: 2026-08-10.
 
 ## Where things stand
 
-**Backlog #23a (backup/restore for stateful data) done, live, restore
-proven — see ADR 0030.** Daily `pg_dump` CronJobs + a second, separate
-`local-path` PVC per PostgreSQL instance (`api`'s `postgresql`,
-`clinvar-service`'s `clinvar-postgresql`), each authenticating as the
-instance's existing least-privilege app user via the established
-out-of-band Secret pattern (`bootstrap/create-stateful-secrets.sh`) —
-not the Bitnami chart's own built-in `backup.enabled` cronjob, whose
-hardcoded `pg_dumpall`-as-`postgres`-superuser was confirmed live not to
-authenticate against `api`'s instance at the time (a separate finding
-tracked as backlog #73, since fixed for real, 2026-08-02,
-platform#88/#89 — see that item's own entry). Loki/Tempo explicitly left out of scope
-(regenerable observability data, not source-of-truth state — a stated
-decision). Restore proven for real (2026-07-30, `platform`#62): dumped
-both live databases read-only, restored into a scratch instance/PVC,
-row counts verified exact (`work_items` 15/15, `clinvar_variant_index`
-2,895,514/2,895,514, `clinvar_release` 4/4), real measured RTO
-(0.31s/46.4s, not estimated), live instances confirmed untouched
-throughout. Single node/disk loss stated explicitly as an accepted risk
-this does not protect against (ADR 0021/S7's existing acceptance, not a
-new one) — off-node replication deferred to a real multi-node migration
-(M7). ADR 0030 is this decision's record in `adamastorx`'s own log,
-since the mechanism/proof previously lived only as a `platform`-repo
-runbook (`docs/runbooks/backup-restore.md`) with no `adamastorx`-side
-decision record, a real gap given backlog #81 already names this item
-as a named prerequisite.
+**Backlog #49 (Cilium/Hubble, replacing flannel) and #50 (first
+NetworkPolicies) are both Done and live, 2026-08-10** — the day's major
+work: a real, live, deliberate single-node cluster rebuild, followed by
+5 real `CiliumNetworkPolicy` batches (`clinvar`/`api`/`workers`/`alloy`/
+`prometheus`), plus two ingress-enforcement follow-up fixes found and
+applied during the closure itself (`alloy`, `alertmanager`) — across
+`platform`#148–#162 and `adamastorx`#239–#249. `docs/roadmap/backlog.md`'s own #49/#50 entries
+and `docs/architecture/overview.md`'s "Network dataplane" section have
+the full, real account (including a genuine production incident and its
+root cause) — this section only keeps the gremlins worth knowing before
+touching this stack again, since a live Cilium/CiliumNetworkPolicy quirk
+belongs here more than duplicated into the permanent record.
 
-**Backlog #57 (continuous profiling) done, live, both open questions
-resolved with real evidence — see ADR 0028.** Pyroscope deployed
-(unprivileged init-container agent injection into `api`/`clinvar-service`,
-not a rebuilt image or a privileged Alloy DaemonSet — ADR 0028's own
-reasoning). One real bug found and fixed post-merge: both init containers
-initially had no `resources` block, which api's/clinvar-service's
-namespace `ResourceQuota`s (memory quota set) reject outright — blocked
-`api`'s entire Rollout with a real `failed quota` until platform#83 added
-explicit small requests/limits. Once fixed: both services confirmed
-pushing real profiles continuously (Pyroscope's own logs show repeated
-`"profile accepted"` for both `service_name=api`/`detected_language=java`
-and `service_name=clinvar-service`/`detected_language=python`). The #35
-incident reproduced live (`api`'s CPU limit temporarily set to `500m`,
-confirmed pegged via `kubectl top`, Argo Rollouts' `progressDeadlineAbort`
-caught it in ~3 minutes same as #46's own precedent) and a real flame
-graph pulled from that exact window — the real answer surprised the
-original hypothesis: self-time is dominated by the JVM's own C2 JIT
-compiler internals (`PhaseChaitin`/`PhaseIdealLoop`, register allocation
-and loop optimization) and class-loading overhead, not application-level
-Hibernate/Flyway/Kafka bootstrap code. Cluster confirmed back to a clean
-state afterward.
+**Real, still-relevant gremlins from that work**:
 
-**Local dev TLD switched from `.dev` to `.test`, real incident.**
-Every fixed local address (`api`/`grafana`/`prometheus`/`alertmanager`/
-`clinvar-viewer`.local.adamastorx.dev) broke in both Chrome and Firefox
-with an unrecoverable HSTS error ("you cannot add an exception"), even
-before the CA had been trusted anywhere — confirmed live in both
-browsers, not a config mistake. `.dev` is Google-owned and
-HSTS-preloaded unconditionally into every major browser; unlike a
-normal self-signed-cert warning, there is no manual override at all on
-a `.dev` hostname with an untrusted cert. Switched every hostname to
-`*.local.adamastorx.test` — IANA-reserved for exactly this case, never
-delegated, not on any preload list. **Separately confirmed while fixing
-this**: Chrome/Chromium on Linux does not read the system OpenSSL trust
-store `update-ca-certificates` populates — it has its own NSS database
-(`certutil -d sql:$HOME/.pki/nssdb ...`), and Firefox has a third,
-separate store again. All three now documented in
-`platform/kubernetes/cert-manager-issuers/README.md`.
+- **Cilium's DNS proxy (`toFQDNs`/`rules.dns`) is genuinely broken in
+  this cluster's exact config** (`routingMode: tunnel`/vxlan +
+  `kubeProxyReplacement`/socket-LB, matches open upstream
+  `cilium/cilium#46284`) — the moment any policy adds an L7 `rules.dns`
+  selector, it drops **all** locally-originated pod DNS, not just the
+  intended FQDN. Confirmed live, twice, independent of
+  `dnsProxy.enableTransparentMode`. Worked around with `toCIDR` real IP
+  ranges instead (pure L3, never touches the DNS proxy) for the three
+  real flows that needed public egress (NCBI, GitHub, `ntfy.sh`). If a
+  future policy seems to want `toFQDNs` again, check the upstream issue
+  before assuming it's fixed — it wasn't as of this rebuild.
+- **`CiliumNetworkPolicy` `toPorts` needs the real backend *container*
+  port, not the Service's own port.** `clinvar-service`'s Service is
+  port 80, its container listens on 8000 — Cilium evaluates policy on
+  the post-DNAT packet, so a rule naming port 80 lets nothing through
+  even though the Service "looks" reachable. Caused a real false-alarm
+  emergency rollback mid-investigation once (the manual connectivity
+  test used the wrong port, not an actual bug). Check
+  `kubectl get svc -n <ns> <name> -o jsonpath='{.spec.ports}'` before
+  writing a `toPorts` rule, or before concluding a policy is broken.
+- **Cilium only enables per-direction policy enforcement when that
+  direction has at least one real rule object.** An omitted or
+  explicitly-empty `ingress:`/`egress:` key does nothing — that
+  direction stays fully unenforced (real default-allow), even though
+  the policy "looks" like default-deny. Bit two already-merged policies
+  (`alloy`, `alertmanager`) before being caught by a deliberate audit
+  pass. Check `cilium-dbg endpoint list`'s `policy-enabled` says `both`,
+  not just one direction, whenever a policy is meant to enforce both.
+- **`hostNetwork: true` pods share Cilium's `reserved:host` identity
+  with no distinct endpoint of their own** (node-exporter,
+  cilium-agent/cilium-operator, Beyla, confirmed live via
+  `cilium-dbg endpoint list`) — a `CiliumNetworkPolicy` can't select
+  them by pod label at all. Egress to them needs `toEntities: host`;
+  they can't get their own ingress policy. Not a bug, a real Cilium
+  constraint worth knowing before assuming a missing policy is an
+  oversight.
 
-**Chaos scenarios 1 and 2 (backlog #23) done live, real fact packs in
-`observability/chaos/`.** Real, unscripted incidents surfaced in both.
-Scenario 2's is the most reusable for future work: **nested app-of-apps
-self-healing defeats a live sync pause.** `root` (the GitOps entrypoint)
-manages every child `Application` object under `argocd/apps/` as one of
-its own tracked resources — a `kubectl patch` on a child's
-`spec.syncPolicy.automated` gets reverted by `root`'s own selfHeal just
-as fast as `root` reverts any other drift. To genuinely pause one
-component's sync for a test, the only way that sticks is a real,
-committed git change to that Application's manifest (removing
-`automated`), and even then `root` itself needs an explicit
-`argocd.argoproj.io/refresh=hard` (not just a refresh on the child) to
-pick up the change to the tracked file — refresh the parent that tracks
-the manifest, not the child whose live object you're diffing. Revert
-the same way (a real PR), and expect the same refresh lag.
+## Where to look next
 
-**Same gremlin, another real trigger (backlog #107, 2026-08-06)**:
-merging a new `alertmanager.extraSecretMounts` key into `prometheus`'s
-own `valuesObject` and syncing produced `Synced`/`Healthy` with the
-`Application`'s own `spec.source.helm.valuesObject.alertmanager.
-extraSecretMounts` still empty — the sync had nothing new to apply, so
-`prometheus-alertmanager-0` stayed the exact same 11-day-old pod, 0
-restarts, no new volume. Not a chart-values typo (confirmed correct
-against the real subchart's own `values.yaml`) — the same
-`argocd.argoproj.io/refresh=hard` on `root` fixed it. A useful tell for
-next time: if a `Synced`/`Healthy` chart-values change produces zero
-observable pod change, check whether the value actually reached
-`spec.source.helm.valuesObject` before assuming the values themselves
-are wrong.
-
-**Two independent integration points share the same "blocks for tens of
-seconds before failing" shape**: Kafka's producer `send()` (found in
-scenario 1, ~60s `max.block.ms`) and HikariCP's connection acquisition
-(found in scenario 2, ~30s default). Neither is what "fire-and-forget
-async publish" or "connection pooling" sound like they'd do — both hang
-the calling HTTP thread first. New backlog #43 tracks re-examining the
-Kafka side; the Postgres side doesn't have its own item yet (the
-underlying HikariCP timeout is a reasonable default, the real finding is
-just that it exists and is user-facing).
-
-**Readiness probe blind spot, confirmed live (new backlog #44)**: `api`'s
-readiness group never reflected a real, 6-minute-sustained PostgreSQL
-outage — Kubernetes kept routing traffic to a pod that could not
-actually serve a DB-backed request. The full `/actuator/health` endpoint
-correctly hung (confirming the DataSource check itself works), it's
-specifically excluded from Boot's readiness *group*. Very likely
-Spring's own intentional design (avoid one DB blip pulling every replica
-out of rotation) rather than a bug — but with this project's single
-replica per service, that specific tradeoff doesn't actually apply, so
-it's worth a stated decision rather than an unexamined default.
-
-**`local-path`'s unenforced PVC quota (already known) ruled out "PVC
-full" as a safely-testable chaos scenario entirely** — the "2Gi" a PVC
-requests is nominal only; the real mount is the node's shared disk, and
-deliberately filling it risks the whole node, not just the one
-component. #23's scenario 2 dropped that half rather than attempting it.
-
-**No existing alert caught either brief-outage window on the first
-try** in both scenarios 1 and 2 — `ApiHighErrorRate`/the Kafka-adjacent
-signals all need a sustained 5-minute window of real, non-zero traffic
-to trip, and this project's actual traffic (manual/test requests) rarely
-produces that on its own. Scenario 2 eventually proved `ApiHighErrorRate`
-*does* fire correctly once ~6 minutes of real sustained failing traffic
-was generated on purpose — the alert itself works, the gap is realistic
-traffic volume, not the rule. A real notification was confirmed
-delivered to the live `ntfy.sh` topic, the first real end-to-end alert
-fire on this cluster.
-
-**Simplification pass executed (ADR 0021).** The user asked to argue for
-maximum simplification — remove anything that doesn't earn its
-complexity. A staff-engineer audit found `gateway` had exactly one
-route (a placeholder from M1, never wired to real traffic) while
-carrying a full tax (its own module, CI pipeline, namespace, ArgoCD
-Application, Ingress, TLS cert) — the same shape as `whoami`, the
-original one-time Traefik+TLS proof, now redundant. Both **removed
-entirely, verified live**: `services/gateway` and `platform/kubernetes/
-{gateway,whoami}` deleted, both namespaces deleted from the live
-cluster, `api` given its own Ingress+cert (`api.local.adamastorx.test`,
-`adamastorx-ca`), confirmed reachable through Traefik with real TLS
-(`curl --resolve ... --cacert adamastorx-ca.crt` → `200`). Also cut:
-gnomAD enrichment (never built, ~7.7GB real size didn't fit this
-cluster), M6 (backlog #30, the reserved FASTQ/alignment milestone —
-judged to extend the "bio coat of paint" risk rather than resolve it),
-HGVS/liftover (#40/#41 — bio depth for a bio audience, no new SRE
-signal), and several M4 items that read as ceremony for a solo project
-(#21b burn-rate policy, #33 solo postmortems, #34 laptop load-testing,
-#23b folded into #23a, chaos trimmed from 7 scenarios to 3). `#38`/`#39`
-(real correctness bugs/fixes) and the ClinVar provenance/invalidation
-story were explicitly kept — judged the project's most defensible
-portfolio content, not cut for cutting's sake.
-
-**Real incident found executing this**: after the resource-governance
-work (backlog #35) added a 500m CPU limit to `api`, a routine rollout
-got stuck in `CrashLoopBackOff` for 95 minutes — `kubectl top pod`
-confirmed the new pod pegged at 498m/500m (cgroup-throttled) during
-JVM cold start (Hibernate/Flyway/Kafka bootstrapping), missing the
-liveness probe's 80s budget every single time, while the old pod kept
-serving traffic the whole time (rolling-update default masks this kind
-of stuck deploy from being visibly "down"). Fixed by raising `api`'s
-CPU limit to 1 core (and the namespace's `ResourceQuota` to match) —
-confirmed live: new pod `1/1 Running`, 0 restarts, steady-state usage
-~30m, nowhere near the new ceiling. **Lesson**: a CPU limit sized from
-steady-state usage alone can starve a JVM's cold start even when
-steady-state headroom looks generous — check an actual cold start
-under the proposed limit, not just steady-state `kubectl top`, before
-trusting a resource-governance change on any JVM workload.
-
-**Backlog #21 (SLOs + alerting) and #21c (Alertmanager receiver) implemented
-and merged.** `argocd/apps/prometheus.yaml`:
-`alertmanager.enabled` flipped to `true`, seven alert rules added under
-`server.serverFiles.alerting_rules.yml` (one per ADR 0020 SLO-table row,
-except clinvar-service's lookup non-5xx — see gap below), Alertmanager's
-own `config` wired to a single real receiver: a `webhook_configs` entry
-pointed at a randomly-generated-once `ntfy.sh` topic (zero account/
-credential needed, verified live with a real `curl` POST before choosing
-it), plus a minimal severity-routing tree (`critical` gets a faster
-`group_wait`/`repeat_interval`, everything else shares the same receiver
-on a slower cadence — #21b's future burn-rate work gets a place to attach
-a second receiver later, not built now). Also fixed in the same PR:
-`clinvar-service` was never actually added to Prometheus's
-`extraScrapeConfigs` when #21a shipped its `/metrics` endpoint — confirmed
-missing on the live `/api/v1/targets` output before writing any
-clinvar-service alert rule, since an unscraped metric's rule would just
-silently never fire rather than error. **Stated gap, tracked as new
-backlog #21e**: `clinvar_lookup_duration_seconds` has no status/outcome
-label, so `GET /internal/clinvar/lookup`'s non-5xx-rate SLO has no alert
-yet (shipped without one rather than faking it against data that isn't
-there); `clinvar_ingestion_duration_seconds_count` increments on both
-success and failure, so the `ClinVarIngestionFreshnessBreach` alert that
-did ship can only detect "no attempt in 8 days", not "attempts happened
-but every one failed" (ADR 0020's own wording is "last *successful*
-ingestion"). All 7 PromQL expressions verified syntactically valid and
-evaluable against the live cluster's real Prometheus
-(`kubectl -n prometheus port-forward svc/prometheus-server`) before
-opening the PR. See the PR description for exactly what was/wasn't
-verified live end to end (rules loaded into `/api/v1/rules`, a real
-alert firing into the ntfy topic) vs. left for post-merge.
-
-**M4 kicked off (ADR 0020): backlog #21a (real histogram/consumer-lag/
-clinvar-service metrics) is done and verified live.** A five-persona
-survey (architect, backend-engineer, platform-engineer,
-observability-engineer, documentation-engineer) converged
-independently on "M4 is the most overdue milestone." ADR 0020 made
-ADR 0017's own named gaps (no true latency percentiles, no real Kafka
-consumer-lag metric) the explicit prerequisite for #21's SLOs, plus
-gave `clinvar-service` its first Prometheus metrics from zero. All
-three now confirmed live with real traffic: a real `POST /work-items`
-produced genuine `http_server_requests_seconds_bucket` series, a real
-produce/consume cycle produced a genuine
-`kafka_consumer_fetch_manager_records_lag` gauge on `workers` (the
-hand-built `ConsumerFactory` needed an explicit
-`KafkaClientMetrics(...).bindTo(meterRegistry)` call — Boot's
-auto-configured Kafka metrics binder never applies here, same root
-cause as the `observation-enabled` no-op below), and `clinvar-service`'s
-new `GET /metrics` returned real `clinvar_ingestion_duration_seconds`/
-`clinvar_ingestion_in_progress`/`clinvar_ingestion_rejected_total`/
-`clinvar_lookup_duration_seconds` series. Dashboards (ADR 0017) updated
-to plot the real values instead of the average/max/thread-pool
-stand-ins. Backlog #27 closed as superseded (ADR 0019); #28/#29
-rescoped for `clinvar-service`'s real Python architecture. Next: #21
-(SLOs), #22 (runbooks), #23 (7 chaos scenarios now, `clinvar-service`'s
-own Postgres/PVC added as #7).
-
-**platform#34 (Postgres Secret regeneration) root-caused, fixed, and
-then immediately demonstrated its own pre-fix damage.** Confirmed by
-rendering each affected Bitnami chart (`postgresql`, `redis`,
-`clinvar-postgresql`, `kafka`) twice offline with identical inputs —
-the auto-generated Secret's password/cluster-id differs on every
-render, since `common.secrets.passwords.manage`'s reuse-idempotency
-needs a live-cluster Helm `lookup()` that ArgoCD's `helm template`
-rendering never has. Fixed going forward with `spec.ignoreDifferences`
-on each Secret's `/data` (platform#40) — but this only stops *future*
-drift; deploying the M4 metrics work bounced `api`'s pod, and the fresh
-pod's first-ever connection attempt hit `FATAL: password authentication
-failed for user "api"` — the Secret had *already* silently diverged
-from Postgres's real password at some earlier point, before the fix
-landed, and nothing had forced a fresh connection since. Confirmed via
-`kubectl exec postgresql-0 -- env | grep PASSWORD` vs. the Secret's own
-value (different), fixed live with explicit confirmation (`ALTER USER
-api WITH PASSWORD '<Secret's value>'`) — same playbook as the original
-incident, see the gotcha below. **Lesson**: `ignoreDifferences` prevents
-new drift, it does not retroactively repair a Secret that already
-drifted — if this recurs on Redis/Kafka/clinvar-postgresql, check for
-a *pre-existing* mismatch the same way before assuming the fix already
-covers it.
-
-**Same rollout, separately: all 3 Kafka topics vanished** (`work-items`,
-`work-items.DLT`, `clinvar.ingestion.completed`) — confirmed a
-coincidental broker restart (`kafka-controller-0` at 85m age, so within
-this session), matching ADR 0011's known ephemeral-storage behavior
-(`auto.create.topics.enable: false`). Recreated manually (3 partitions
-for `work-items`/`.DLT`, 1 for `clinvar.ingestion.completed`), then
-restarted `api`/`workers`/`clinvar-service` for clean consumer-group
-state. No data lost (in-flight messages only), but worth remembering
-this can wipe topics silently again on any future Kafka pod restart.
-
-**Independent staff-engineer audit** (a genuinely cross-cutting review,
-not one of the 5 narrow repo personas) found: `.claude/PROJECT.md`'s
-"Current milestone" section had drifted badly stale (still said "M2 in
-progress, services#5 remaining" after M3 and M5 had both shipped) —
-fixed directly, and backlog #32 added to make that drift checkable
-going forward instead of silently possible. Also found a genuinely
-uncovered gap: **no backup/restore path exists for any stateful data**
-(`api`'s Postgres, `clinvar-service`'s own Postgres, Loki, Tempo — all
-a single node-pinned PVC each, no `pg_dump`/snapshot/off-node copy
-anywhere) — added as backlog #23a. And #31, a proposed top-level "what
-this project demonstrates" narrative doc, since the real throughline
-(incidents found and fixed live, the ADR 0018→0019 pivot) is currently
-only reconstructable by reading ~20 ADRs end to end.
-
-**M5 Clinical Variant Annotation is live and verified end to end.**
-`clinvar-service` (Python/FastAPI, ADR 0019, own `clinvar` namespace,
-own dedicated Postgres) replaced ADR 0018's original design after two
-real cross-namespace bugs (a PVC, then a Postgres Secret — neither
-shareable across `api`/`workers`) surfaced deploying it. `api` calls it
-over HTTP and fronts the result with the existing Redis cache-aside
-layer, invalidated on write via a Kafka event carrying the specific
-changed cache keys. Verified live: a real ingestion (4,453,798 VCF
-records, 2,895,514 rsID-indexed rows) followed by `GET
-/variants/lookup?rsid=rs80357906` through `api` returning BRCA1's real
-ClinVar classification, `"Pathogenic"`. `docs/architecture/overview.md`
-now documents this as live, not aspirational.
-
-**Real incident found and fixed during the same rollout**: two manual
-ingestion triggers sent close together ran two full ClinVar VCF scans
-concurrently — no lock existed, and the slowest step (`_build_variant_
-index_rows`, a pure-Python scan building ~2.9M in-memory tuples) had no
-logging at all, so the stall was invisible until `--previous` container
-logs were read directly. The pod was SIGKILLed (`exit 137`) with **no
-OOM evidence anywhere** — checked `dmesg -T`, `journalctl -k`, and
-`journalctl -u k3s.service` around the exact timestamp, all clean; the
-node itself had memory headroom afterward too. Root cause is
-circumstantial (two overlapping multi-hundred-MB Python object builds
-contending for the 768Mi limit) rather than confirmed via a single
-smoking-gun log line — worth knowing if this ever recurs, since the
-usual "check dmesg for OOM" playbook doesn't work here. Fixed
-(services#36): `ingest()` now holds a lock for its duration and rejects
-a second concurrent call (409), plus progress logging every 250k
-records so a future stall is visible instead of a silent multi-minute
-gap.
-
-M2 Distributed Application: services#1 (gateway), services#2 (API),
-services#3 (Kafka, ADR 0011), services#4 (PostgreSQL, ADR 0012), and
-**services#5 (Redis cache-aside, ADR 0016) are all done and closed.**
-Redis verified end to end against the real cluster: `GET
-/work-items/{id}` twice on a fresh item produced `cache_gets_total{
-result="miss"} 1.0` then `{result="hit"} 1.0`, `error 0.0`, read
-straight off `/actuator/prometheus`. Fail-open on a Redis outage is
-proven in CI (`WorkItemCacheOutageIntegrationTest` stops the
-Testcontainers Redis mid-test), not repeated live to avoid disrupting
-the real Redis for a case already covered. Honest answer baked into
-ADR 0016: `GET /work-items/{id}` is a good candidate for this issue's
-actual AC (hit/miss metric, tested fail-open) but not for demonstrating
-invalidation-on-write, since `work_items` has no update path — any
-invalidation here is TTL-only, stated plainly rather than picked
-around.
-
-**Real incident found during the Redis rollout, unrelated to Redis
-itself**: the `postgresql` Secret had silently regenerated to a value
-different from what Postgres was actually initialized with — see the
-gotcha below. Fixed live with explicit human confirmation
-(`ALTER USER api WITH PASSWORD`); root cause tracked as
-`platform`#34, unresolved.
-
-M3 Observability: **observability#1 (OTel tracing, ADR 0013, backlog
-#17), #2 (Prometheus + Grafana, ADR 0014, #18), #3 (Loki + Tempo +
-Alloy, ADR 0015, #19), and #4 (golden-signal dashboards, ADR 0017,
-#20) are all done — M3 is complete.** A real trace from a live `POST
-/work-items` request was confirmed end to end: landed in Tempo (2
-spans, `api` + `workers`), its log line (same trace ID) landed in
-Loki, Grafana's Loki↔Tempo pivot works both directions, and all 4
-Prometheus targets confirmed `up`. Dashboards were built by a
-background agent (per-service golden signals, provisioned as code,
-confirmed via the Grafana pod's own provisioning logs — "finished to
-provision dashboards," no errors, `grafana-dashboards-golden-signals`
-ConfigMap has 3 keys). Backlog #19a (Prometheus exemplars, metric→trace
-pivot) and #21 (SLOs/alerting, M4) are tracked but deliberately not
-built yet — #21 explicitly depends on #20's dashboards, see ADR 0017's
-"tension worth resolving explicitly" section for the reasoning.
+- #49/#50 themselves closed clean, nothing left mid-flight on that
+  work specifically — check `gh pr list --repo AdamastorX/adamastorx`/
+  `--repo AdamastorX/platform` for whatever's actually open right now,
+  since this line goes stale the moment a new PR opens.
+- `docs/roadmap/backlog.md` is the live source of truth for what's open
+  next (currently #1–#121, structural integrity enforced by
+  `scripts/check_backlog_structure.py` and CI's `backlog-structure`
+  check on every PR).
+- `.claude/PROJECT.md`'s "Current milestone" section is the stable,
+  point-in-time picture of where the project stands overall — check it
+  before this file for the big picture; this file is for tactical
+  gremlins and in-flight state, not milestone status.
 
 ## Recurring gotcha worth knowing before touching this stack again
 
@@ -523,13 +245,18 @@ was actually stuck.
 
 ## Cluster access (this machine)
 
-k3s kubeconfig at `~/.kube/config`. `kubectl` here does **not** default
-to it on its own — always run with `KUBECONFIG` set explicitly:
+Real, current kubeconfig, generated fresh by the 2026-08-10 cluster
+rebuild:
 ```
-export KUBECONFIG=~/.kube/config
+export KUBECONFIG=/home/lmpeixoto/repos/AdamastorX/platform/terraform/kubeconfig
 ```
-Not persisted in `~/.bashrc` (blocked by the permission classifier) —
-set it per session.
+`kubectl` here does **not** default to it on its own — always set
+`KUBECONFIG` explicitly, every session (not persisted in `~/.bashrc`,
+blocked by the permission classifier).
+
+**The older `~/.kube/config` is stale/pre-rebuild** — a review agent
+that tried it during the rebuild's own follow-up work got real TLS
+errors against it. Use the path above, not `~/.kube/config`.
 
 ## ArgoCD stuck-operation gremlin (if it recurs)
 
@@ -563,7 +290,10 @@ a real (if oddly-labeled) success. Confirmed via
 showing the old `provisioning.topics` list post-failure. **Fix: never set
 `revision` in a manual sync patch for a Helm-sourced Application** —
 omit the field entirely (`{"sync":{}}`) so the controller reads the
-live `spec.source.targetRevision` fresh.
+live `spec.source.targetRevision` fresh. (Note: this is specifically
+about Helm-chart-sourced Applications — `"HEAD"` is fine, and was used
+successfully throughout the 2026-08-10 NetworkPolicy work, for
+git-path-sourced Applications like every `*-network-policies` one.)
 
 ## Namespace-per-component isn't absolute
 
@@ -577,61 +307,6 @@ no credential to worry about (open OTLP receiver, like Kafka's
 PLAINTEXT). If Redis ends up needing credentials and has a single
 consumer, the Postgres reasoning likely applies again — don't assume a
 new namespace by default.
-
-## Where to look next
-
-- `platform`#34 (Postgres Secret regeneration) is **fixed** (PR #40,
-  `ignoreDifferences` on 4 charts' Secrets) — but re-check any
-  stateful component's Secret against its pod's actual env on the next
-  incident, since the fix only stops new drift, not an
-  already-diverged credential (see above, `api` hit exactly this right
-  after the fix landed).
-- M4: #21 (SLOs/alerting) is next, now unblocked — #21a's real
-  histogram/lag/clinvar metrics are live. #22 (runbooks) and #23 (7
-  chaos scenarios) follow. #19a (Prometheus exemplars) still not
-  started, lower priority than #21.
-- observability#13/#14 (release-ID trace propagation, `clinvar-service`
-  dashboard + `ClinVarInvalidationLag` alert) — rescoped for ADR 0019
-  (see backlog #28/#29), not started.
-- backlog #23a (backup/restore for stateful data — no Postgres/Loki/
-  Tempo backup exists anywhere), #31 (top-level project narrative
-  doc), #32 (keep `.claude/PROJECT.md` from drifting stale again) — all
-  new from the staff-engineer audit, none started.
-- gnomAD's real size (~7.7GB, not the "a few hundred MB" ADR 0018
-  originally assumed) — flagged during M5 planning, not yet tracked in
-  a dedicated issue or resolved.
-- **Fixed** (backlog #54, services#46, platform#69 — PRs open, pending human merge): `POST
-  /internal/clinvar/ingest` no longer blocks for the whole multi-minute
-  ingestion — it now returns `202` with a job id immediately (real,
-  measured: 51ms in the live proof below), and job state
-  (`queued`/`running`/`succeeded`/`failed`/`cancelled`) lives in a new
-  `clinvar_ingestion_job` table in `clinvar-service`'s own Postgres, not
-  in memory. `GET /internal/clinvar/ingest/{job_id}` polls state plus
-  real progress (the existing per-250k-record checkpoint, now also
-  written to the row). services#36's `threading.Lock` is **retired**,
-  not kept alongside: `clinvar_ingestion_job`'s own partial unique index
-  (at most one `queued`/`running` row) is the concurrency guard now,
-  and unlike an in-process lock it survives a pod restart, which is the
-  actual property this item needed. Cancellation
-  (`POST .../ingest/{job_id}/cancel`) is proven live to stop the
-  in-flight scan, not just relabel the row. **Live-verified against a
-  real deployed instance on the real cluster, real NCBI ClinVar data**:
-  triggered a real ingestion (4,458,175 records scanned, matching the
-  documented ~4.45M real-data baseline), force-killed the pod
-  (`kubectl delete pod --grace-period=0 --force`) while the job was
-  still `running`, and confirmed on the new pod's restart that
-  `reconcile_orphaned_jobs()` marked it `failed` with reason "orphaned:
-  process restarted while this job was still running" — never left
-  `running` forever — and that the abandoned placeholder release never
-  went active (`GET /variants/lookup` correctly 404s with "No ClinVar
-  release has been ingested yet"). `ClinVarIngestionFreshnessBreach`
-  re-pointed at `clinvar_ingestion_jobs_total{status="succeeded"}`, a
-  real job-outcome signal — closing backlog #21e's ingestion-side gap
-  (the old expression only proved "an attempt happened", not that any
-  succeeded).
-- observability#7 (chaos/incident-lab scenarios) — 7 concrete scenarios
-  defined (ADR 0020 added a 7th for `clinvar-service`), none
-  implemented yet.
 
 ## Working via background agents (new pattern, this session)
 
