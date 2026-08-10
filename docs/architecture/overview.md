@@ -11,9 +11,11 @@ gate — see backlog's M13 section). **M7 was rescoped 2026-08-09 (ADR
 0040)**: a live capacity measurement (93% of this node's 4000m CPU
 requests already committed, on 4 hyperthreads/2 physical cores) found the
 planned multi-node move doesn't fit this machine — backlog #48 closed as
-superseded, not Done. Cilium/Hubble and the project's first
-NetworkPolicies (#49/#50) proceed on **one node** via a deliberate
-cluster rebuild instead; the multi-node substrate itself (replicated
+superseded, not Done. **Cilium/Hubble (#49) went live on one node via a
+deliberate cluster rebuild, 2026-08-10** — see "Network dataplane"
+below; #50 (the project's first NetworkPolicies, on Cilium's now-live
+policy engine) is the one real piece of that pair still open. The
+multi-node substrate itself (replicated
 storage #51, node-drain/rolling-upgrade drills #52) and the Istio ambient
 mesh (#59-#62, superseded by app-level fail-fast, #43/#105) stay
 **blocked-on-hardware, no date** — real, ADR-recorded decisions
@@ -104,9 +106,13 @@ repo's CI builds and Trivy-scans every PR image as a required merge gate.
 **Network dataplane (backlog #49, ADR 0023/0040) — Cilium replaces
 flannel, live as of 2026-08-10.** k3s reinstalled with
 `--flannel-backend=none --disable-network-policy --disable-kube-proxy`
-via a deliberate, rehearsed full-cluster rebuild (`platform/docs/
-runbooks/flannel-restore.md` proven first, per ADR 0040's own
-requirement) — Cilium 1.20.0 (`argocd/apps/cilium.yaml`) now owns the
+via a deliberate full-cluster rebuild (`platform/docs/runbooks/flannel-restore.md`
+written first, per ADR 0040's own requirement — the runbook's real
+PVC inventory and backup mechanism were live-verified in advance, but
+the actual `terraform destroy`/`apply` cycle itself was not
+separately rehearsed before going live on the real cluster; a stated
+deviation, not a silent one, kept honest here rather than only in the
+backlog). Cilium 1.20.0 (`argocd/apps/cilium.yaml`) now owns the
 CNI, kube-proxy's service load-balancing (`kubeProxyReplacement`, eBPF,
 no iptables), and — once #50 lands — the cluster's only NetworkPolicy
 engine. Hubble flow observability is enabled and live: `hubble-relay`
