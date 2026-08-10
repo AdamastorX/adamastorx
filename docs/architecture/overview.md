@@ -138,14 +138,14 @@ copy) — not a real config difference, checked directly against the
 actual chart render before being written down here as expected rather
 than investigated as a bug.
 
-**#50's NetworkPolicies — two batches written, currently rolled back
-live (2026-08-10, `clinvar-network-policies` + `api-network-policies`)**:
+**#50's NetworkPolicies — two batches live (2026-08-10,
+`clinvar-network-policies` + `api-network-policies`)**:
 `clinvar-service`/its own PostgreSQL and `api`/its own PostgreSQL/Redis
-each got a real `CiliumNetworkPolicy` default-deny batch, explicit
+each run a real `CiliumNetworkPolicy` default-deny batch, explicit
 allows derived from live `hubble observe` captures cross-checked
 against the real architecture — catching a live Kafka egress gap
 (`clinvar`) and a missing init-container GitHub egress (`api`) before
-either ever reached a broken deploy. But applying either batch's
+either ever reached a broken deploy. Applying either batch's original
 `toFQDNs`/`rules.dns` DNS-proxy rule surfaced a real, open upstream
 Cilium bug (`cilium/cilium#46284`-adjacent — the DNS proxy L7 redirect
 itself, not just its transparent-mode setting, drops locally-originated
@@ -153,12 +153,16 @@ pod DNS under this cluster's tunnel+socket-LB config): one real `api`
 pod hit genuine `Init:Error` from it before an emergency rollback, and
 a first fix attempt (`dnsProxy.enableTransparentMode: false`,
 `cilium.yaml`) was independently verified but still failed live
-re-testing. Both namespaces' policies are deliberately **not applied**
-right now (`kubectl delete ciliumnetworkpolicy`, confirmed stable,
-Cilium default-allow) — git declares them, the cluster doesn't run
-them — until the DNS-proxy bug itself is actually resolved. Every
-other namespace #50 names (`workers`/Kafka, Prometheus's own scrape
-targets, `alloy`→Loki) is still open too. Cross-node routing, WireGuard
+re-testing. **Fixed (platform#156)** by removing `rules.dns` entirely
+(plain L3/L4 port-53 DNS allow never invokes the proxy redirect) and
+excluding the two `toFQDNs` public-egress files from sync — re-applied
+live, every one of #50's named minimum flows for these two namespaces
+verified with real TCP connects at their real Service ports, zero
+Hubble drops, restart counts unchanged. NCBI/GitHub public egress
+stays a real, stated, temporarily-unenforceable gap until the upstream
+bug is actually fixed. Every other namespace #50 names (`workers`/Kafka,
+Prometheus's own scrape targets, `alloy`→Loki) is still open. Cross-node
+routing, WireGuard
 node-to-node encryption, and multi-node identity propagation remain
 real but small gaps this single node genuinely cannot exercise (ADR
 0040 §1) — not a Cilium limitation, a hardware one.
