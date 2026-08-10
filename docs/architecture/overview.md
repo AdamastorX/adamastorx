@@ -138,9 +138,9 @@ copy) — not a real config difference, checked directly against the
 actual chart render before being written down here as expected rather
 than investigated as a bug.
 
-**#50's NetworkPolicies — three batches live (2026-08-10,
+**#50's NetworkPolicies — four batches live (2026-08-10,
 `clinvar-network-policies` + `api-network-policies` +
-`workers-network-policies`)**:
+`workers-network-policies` + `alloy-network-policies`)**:
 `clinvar-service`/its own PostgreSQL and `api`/its own PostgreSQL/Redis
 each runs a real `CiliumNetworkPolicy` default-deny batch, explicit
 allows derived from live `hubble observe` captures cross-checked
@@ -168,11 +168,20 @@ bug (no public egress, no `rules.dns`), the one new mechanism being
 Kubernetes Service, ADR 0009/0011). Verified against a real running
 pod (KEDA scaled to 0 normally; scaled to 1 to test, confirmed a real
 Kafka consumer group join with real committed offsets, zero drops,
-scaled back to 0 after). Every real minimum flow #50 names for
-`api`/`clinvar`/`workers` is now live and verified; still open:
-Prometheus→every scrape target, `alloy`→Loki (their own namespaces
-still run unrestricted), and the NCBI/GitHub `toFQDNs` gap. Cross-node
-routing, WireGuard
+scaled back to 0 after). A fourth batch (`alloy-network-policies`,
+platform#158) is also live — `alloy`, no ingress at all (nothing
+legitimately calls it, confirmed live), egress DNS + Loki:3100 +
+`toEntities: host` for its own Kubernetes API discovery. Verified with
+a real Loki query post-apply: 505 real log lines from `alloy` over a
+3-minute window, zero drops, zero restarts. Every real minimum flow
+#50 names for `api`/`clinvar`/`workers`/`alloy` is now live and
+verified; still open: Prometheus→every scrape target (`prometheus`
+namespace still runs unrestricted — a larger, deliberately
+not-yet-rushed piece: 4 pods with different real needs, one of them,
+`alertmanager`, has its own live `ntfy` webhook egress in the same
+`toFQDNs`-blocked class as NCBI/GitHub, planned to be left out of
+default-deny entirely rather than silently break real alerting) and
+the NCBI/GitHub `toFQDNs` gap. Cross-node routing, WireGuard
 node-to-node encryption, and multi-node identity propagation remain
 real but small gaps this single node genuinely cannot exercise (ADR
 0040 §1) — not a Cilium limitation, a hardware one.
@@ -404,9 +413,9 @@ softened; the live description is at the top of this document.
   replacing flannel with Hubble flow observability (ADR 0023) is live** —
   see "Network dataplane" above for the real, verified account. #50 (the
   project's first NetworkPolicies) is enforced today for every real
-  in-cluster minimum flow it names (`api`/`clinvar`/`workers`) — see
-  "Network dataplane" above; Prometheus scrape targets, `alloy`→Loki,
-  and the NCBI/GitHub `toFQDNs` gap remain open. Backlog #23a (backup/restore) was the
+  in-cluster minimum flow it names (`api`/`clinvar`/`workers`/`alloy`) —
+  see "Network dataplane" above; Prometheus scrape targets and the
+  NCBI/GitHub `toFQDNs` gap remain open. Backlog #23a (backup/restore) was the
   hard prerequisite for the rebuild and is **Done** as of 2026-08-04
   (platform#62, ADR 0030) — a real restore drill with a measured RTO,
   proven live again during the actual rebuild for all three PostgreSQL
