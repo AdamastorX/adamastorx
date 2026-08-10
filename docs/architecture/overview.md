@@ -138,16 +138,27 @@ copy) — not a real config difference, checked directly against the
 actual chart render before being written down here as expected rather
 than investigated as a bug.
 
-**#50's NetworkPolicies — first real batch live (2026-08-10,
-`clinvar-network-policies`)**: `clinvar-service` and its own PostgreSQL
-now run under real `CiliumNetworkPolicy` default-deny, explicit allows
-derived from a live `hubble observe` capture cross-checked against the
-real architecture — including a live-caught Kafka egress gap and a
-`toFQDNs`/DNS-proxy footgun, both fixed before ever reaching production,
-applied with a real Hubble drop-monitor confirming zero drops. Every
-other namespace #50 names (`api`, `workers`/Kafka, Prometheus's own
-scrape targets, `alloy`→Loki) is still open — this is the method
-proven once, not the item done. Cross-node routing, WireGuard
+**#50's NetworkPolicies — two batches written, currently rolled back
+live (2026-08-10, `clinvar-network-policies` + `api-network-policies`)**:
+`clinvar-service`/its own PostgreSQL and `api`/its own PostgreSQL/Redis
+each got a real `CiliumNetworkPolicy` default-deny batch, explicit
+allows derived from live `hubble observe` captures cross-checked
+against the real architecture — catching a live Kafka egress gap
+(`clinvar`) and a missing init-container GitHub egress (`api`) before
+either ever reached a broken deploy. But applying either batch's
+`toFQDNs`/`rules.dns` DNS-proxy rule surfaced a real, open upstream
+Cilium bug (`cilium/cilium#46284`-adjacent — the DNS proxy L7 redirect
+itself, not just its transparent-mode setting, drops locally-originated
+pod DNS under this cluster's tunnel+socket-LB config): one real `api`
+pod hit genuine `Init:Error` from it before an emergency rollback, and
+a first fix attempt (`dnsProxy.enableTransparentMode: false`,
+`cilium.yaml`) was independently verified but still failed live
+re-testing. Both namespaces' policies are deliberately **not applied**
+right now (`kubectl delete ciliumnetworkpolicy`, confirmed stable,
+Cilium default-allow) — git declares them, the cluster doesn't run
+them — until the DNS-proxy bug itself is actually resolved. Every
+other namespace #50 names (`workers`/Kafka, Prometheus's own scrape
+targets, `alloy`→Loki) is still open too. Cross-node routing, WireGuard
 node-to-node encryption, and multi-node identity propagation remain
 real but small gaps this single node genuinely cannot exercise (ADR
 0040 §1) — not a Cilium limitation, a hardware one.
