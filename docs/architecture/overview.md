@@ -138,11 +138,16 @@ copy) — not a real config difference, checked directly against the
 actual chart render before being written down here as expected rather
 than investigated as a bug.
 
-**What #49 does not yet cover, honestly**: #50's actual NetworkPolicies
-(default-deny per namespace, explicit allows derived from real observed
-Hubble flows) haven't been written yet — Cilium's policy engine is live
-and ready, but nothing enforces a policy on it today, so this is CNI +
-observability, not yet access control. Cross-node routing, WireGuard
+**#50's NetworkPolicies — first real batch live (2026-08-10,
+`clinvar-network-policies`)**: `clinvar-service` and its own PostgreSQL
+now run under real `CiliumNetworkPolicy` default-deny, explicit allows
+derived from a live `hubble observe` capture cross-checked against the
+real architecture — including a live-caught Kafka egress gap and a
+`toFQDNs`/DNS-proxy footgun, both fixed before ever reaching production,
+applied with a real Hubble drop-monitor confirming zero drops. Every
+other namespace #50 names (`api`, `workers`/Kafka, Prometheus's own
+scrape targets, `alloy`→Loki) is still open — this is the method
+proven once, not the item done. Cross-node routing, WireGuard
 node-to-node encryption, and multi-node identity propagation remain
 real but small gaps this single node genuinely cannot exercise (ADR
 0040 §1) — not a Cilium limitation, a hardware one.
