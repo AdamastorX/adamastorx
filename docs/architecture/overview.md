@@ -141,7 +141,7 @@ than investigated as a bug.
 **#50's NetworkPolicies — two batches live (2026-08-10,
 `clinvar-network-policies` + `api-network-policies`)**:
 `clinvar-service`/its own PostgreSQL and `api`/its own PostgreSQL/Redis
-each run a real `CiliumNetworkPolicy` default-deny batch, explicit
+each runs a real `CiliumNetworkPolicy` default-deny batch, explicit
 allows derived from live `hubble observe` captures cross-checked
 against the real architecture — catching a live Kafka egress gap
 (`clinvar`) and a missing init-container GitHub egress (`api`) before
