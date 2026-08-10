@@ -138,8 +138,9 @@ copy) — not a real config difference, checked directly against the
 actual chart render before being written down here as expected rather
 than investigated as a bug.
 
-**#50's NetworkPolicies — two batches live (2026-08-10,
-`clinvar-network-policies` + `api-network-policies`)**:
+**#50's NetworkPolicies — three batches live (2026-08-10,
+`clinvar-network-policies` + `api-network-policies` +
+`workers-network-policies`)**:
 `clinvar-service`/its own PostgreSQL and `api`/its own PostgreSQL/Redis
 each runs a real `CiliumNetworkPolicy` default-deny batch, explicit
 allows derived from live `hubble observe` captures cross-checked
@@ -161,7 +162,7 @@ verified with real TCP connects at their real Service ports, zero
 Hubble drops, restart counts unchanged. NCBI/GitHub public egress
 stays a real, stated, temporarily-unenforceable gap until the upstream
 bug is actually fixed. A third batch (`workers-network-policies`,
-platform#157) is also live -- `workers`, never exposed to the DNS-proxy
+platform#157) is also live — `workers`, never exposed to the DNS-proxy
 bug (no public egress, no `rules.dns`), the one new mechanism being
 `fromEntities: host` for kubelet's own probes (workers has no
 Kubernetes Service, ADR 0009/0011). Verified against a real running
@@ -402,9 +403,10 @@ softened; the live description is at the top of this document.
   unbundled from multi-node and executed on **one node** instead: **Cilium
   replacing flannel with Hubble flow observability (ADR 0023) is live** —
   see "Network dataplane" above for the real, verified account. #50 (the
-  project's first NetworkPolicies) is the one real piece of M7's
-  network-dataplane half still open — Cilium's policy engine is ready,
-  nothing is enforced on it yet. Backlog #23a (backup/restore) was the
+  project's first NetworkPolicies) is enforced today for every real
+  in-cluster minimum flow it names (`api`/`clinvar`/`workers`) — see
+  "Network dataplane" above; Prometheus scrape targets, `alloy`→Loki,
+  and the NCBI/GitHub `toFQDNs` gap remain open. Backlog #23a (backup/restore) was the
   hard prerequisite for the rebuild and is **Done** as of 2026-08-04
   (platform#62, ADR 0030) — a real restore drill with a measured RTO,
   proven live again during the actual rebuild for all three PostgreSQL
