@@ -29,9 +29,11 @@ generate genuine platform/SRE/DevOps problems worth solving.
 
 ## Current architecture
 
-A single-node k3s v1.36.2 cluster (the owner's local machine, provisioned via
-Terraform SSH remote-exec from `platform/terraform/`; moving to a dedicated
-host is a planned variable change) runs ArgoCD v3.4.5 as the GitOps
+A single-node k3s v1.36.3 cluster (the owner's local machine, provisioned via
+Terraform SSH remote-exec from `platform/terraform/`; a real capacity
+measurement found a second node doesn't fit this machine, ADR 0040 —
+moving to a dedicated host, if it ever happens, is now an open decision
+(#104), not a settled plan) runs ArgoCD v3.4.5 as the GitOps
 entrypoint — an app-of-apps root Application watches the `platform` repo's
 `argocd/apps/` on `main` with prune + selfHeal, so all cluster changes flow
 through Git. Traefik 41.0.2 (hostPort 80/443) and cert-manager v1.21.0 are
@@ -52,9 +54,10 @@ Mimir, Traefik, cert-manager, Trivy, Spring Boot.
 Explicitly excluded — do not introduce without an ADR overturning this:
 Vault, Crossplane, Backstage. The platform stays intentionally small.
 Cilium and service mesh were both on this list originally; both were
-overturned (ADR 0023, ADR 0024 respectively) and removed from it — neither
-is deployed yet (both are M7, not yet built, see "Current milestone"
-above), but the exclusion itself no longer applies to either.
+overturned (ADR 0023, ADR 0024 respectively) and removed from it. Cilium
+is deployed and live (#49/#50, see "Current milestone" below); the
+Istio ambient mesh is not (still blocked-on-hardware) — the exclusion
+itself no longer applies to either.
 
 ## Current milestone
 
@@ -74,10 +77,22 @@ API keys and rate limiting at the edge (#56, ADR 0027) also shipped,
 satisfying the reintroduction condition ADR 0021 left open when `gateway`
 was removed.
 
-**Not yet built**: M7's multi-node substrate — Cilium (ADR 0023) and an
-Istio ambient mesh (ADR 0024) are approved decisions, not running
-components — still gates M11 (`sre-agent`) and the reopened M12
-bioinformatics milestone (ADR 0025), neither of which has started.
+**M7 rescoped 2026-08-09 (ADR 0040) and partly built since**: a live
+capacity measurement found the originally-planned multi-node move
+doesn't fit this machine (backlog #48 closed as superseded, not Done).
+Cilium/Hubble/NetworkPolicies turned out not to be multi-node
+technologies at all, so they were unbundled and built on the existing
+single node instead — **both are now Done and live**: Cilium replaces
+flannel as CNI (#49, a real cluster rebuild, 2026-08-10) and the
+project's first default-deny NetworkPolicies are enforced across every
+real namespace, including public egress via `toCIDR` once the DNS-proxy
+path it originally needed turned out to be broken (#50, same day). What
+remains genuinely **blocked-on-hardware, no date**: the actual
+multi-node substrate (replicated storage #51, node-drain/rolling-upgrade
+drills #52) and the Istio ambient mesh (ADR 0024, #59-#62, superseded by
+app-level fail-fast/#43/#105 as the interim posture) — these still gate
+M11 (`sre-agent`) and the reopened M12 bioinformatics milestone
+(ADR 0025), neither of which has started.
 
 **M13's real-time market-sentiment pipeline (ADR 0029) is complete and
 live** — originally gated on M7 for CPU-headroom reasons (#77), the owner
@@ -132,8 +147,15 @@ the standard-of-care subset, not the whole milestone; #98–#103 are new
 surface themselves and sit outside the gate deliberately. M11
 (`sre-agent`) is sequenced after M15
 deliberately (its evaluation needs the retention window), not cancelled;
-M7's hardware gate stands, with #104 recording an explicit
-dedicated-host-vs-VM-interim decision.
+M7's hardware gate stands for the pieces that are genuinely multi-node
+(replicated storage #51, node-drain drills #52, the Istio mesh). #104
+recorded an explicit decision on this (2026-08-08, ADR 0035: a VM
+interim, not a dedicated host) — since superseded by ADR 0040's own
+real capacity math, the same measurement that closed #48 as
+superseded: the VM interim doesn't fit this machine either, so the
+dedicated-host-vs-interim question is open again in practice, even
+though #104 itself stays closed as Done (it recorded a real decision,
+just not the one still standing).
 
 See `docs/architecture/overview.md` for the detailed real/live-vs-not-yet
 breakdown, `docs/roadmap/milestones.md` and `docs/SESSION_STATE.md` for
