@@ -90,7 +90,7 @@ the map, not the territory.
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Live today:** GitHub as source of truth; a single-node k3s v1.36.2 cluster
+**Live today:** GitHub as source of truth; a single-node k3s v1.36.3 cluster
 (provisioned via Terraform from `platform/terraform/`); ArgoCD v3.4.5
 (app-of-apps over the `platform` repo's `argocd/apps/`, prune + selfHeal);
 Traefik 41.0.2 on hostPort 80/443; and cert-manager v1.21.0 with a local CA
@@ -100,6 +100,46 @@ until a host with public DNS, ADR 0004). Local hostnames are all
 HSTS-preloaded TLD with no manual override for an untrusted cert — a real
 incident found live, recorded in `docs/SESSION_STATE.md`). The `services`
 repo's CI builds and Trivy-scans every PR image as a required merge gate.
+
+**Network dataplane (backlog #49, ADR 0023/0040) — Cilium replaces
+flannel, live as of 2026-08-10.** k3s reinstalled with
+`--flannel-backend=none --disable-network-policy --disable-kube-proxy`
+via a deliberate, rehearsed full-cluster rebuild (`platform/docs/
+runbooks/flannel-restore.md` proven first, per ADR 0040's own
+requirement) — Cilium 1.20.0 (`argocd/apps/cilium.yaml`) now owns the
+CNI, kube-proxy's service load-balancing (`kubeProxyReplacement`, eBPF,
+no iptables), and — once #50 lands — the cluster's only NetworkPolicy
+engine. Hubble flow observability is enabled and live: `hubble-relay`
+aggregates per-agent flows, `hubble-ui` gives a real flow map (exposed
+at `hubble.local.adamastorx.test`, same Traefik/adamastorx-ca Ingress
+pattern as every other UI here), and a dedicated `hubble` Prometheus
+scrape job (`argocd/apps/prometheus.yaml`, pod-role discovery scoped to
+Cilium's own `hubble-metrics` port) feeds `dns`/`drop`/`tcp`/`flow`/
+`port-distribution`/`icmp` flow metrics into the existing Prometheus —
+no parallel stack. Real total Cilium+Hubble footprint: 170m CPU / 448Mi
+RAM requests (`argocd/apps/cilium.yaml`'s own resource comments), all
+components including the standalone `cilium-envoy` DaemonSet
+deliberately disabled (embedded in the agent instead — backlog #114's
+"no unconstrained container" rule ruled out the standalone DaemonSet's
+own chart-default `resources: {}`). All 35 Prometheus scrape targets
+confirmed `up` after the rebuild, cross-namespace paths spot-checked
+live (`api`→`clinvar-service` real HTTP response, Kafka consumer groups
+rejoined, Hubble relay connected to the agent's own gRPC peer). The
+`cilium` Application's own ArgoCD sync status shows a small, understood,
+benign drift (auto-generated Hubble mTLS certs regenerate on every
+`helm template`/`helm install`, so they never byte-match git's rendered
+copy) — not a real config difference, checked directly against the
+actual chart render before being written down here as expected rather
+than investigated as a bug.
+
+**What #49 does not yet cover, honestly**: #50's actual NetworkPolicies
+(default-deny per namespace, explicit allows derived from real observed
+Hubble flows) haven't been written yet — Cilium's policy engine is live
+and ready, but nothing enforces a policy on it today, so this is CNI +
+observability, not yet access control. Cross-node routing, WireGuard
+node-to-node encryption, and multi-node identity propagation remain
+real but small gaps this single node genuinely cannot exercise (ADR
+0040 §1) — not a Cilium limitation, a hardware one.
 
 **`api`** (Maven module in `services`, Spring Boot/webmvc/actuator) is no
 longer a plain Kubernetes `Deployment`: it is an Argo Rollouts **`Rollout`**
@@ -315,31 +355,32 @@ file, and the reason backlog #97 replaces process with a CI check. It is
 not in the list any more because it is done, not because the claim was
 softened; the live description is at the top of this document.
 
-- **M7 Multi-Node Substrate — rescoped 2026-08-09 (ADR 0040)**: a live
-  capacity measurement (`docs/reviews/2026-08-09-hardware-constrained-
+- **M7 Multi-Node Substrate — rescoped 2026-08-09 (ADR 0040), its
+  network-dataplane half now Done (2026-08-10)**: a live capacity
+  measurement (`docs/reviews/2026-08-09-hardware-constrained-
   strategy.md`) found this node's CPU requests already at 93% of its
   4000m allocatable — 4 hyperthreads on a 2-physical-core i7-6600U, not 4
   independent cores — which does not fit a second VM node plus Cilium and
   Istio's real combined overhead (~132% of the machine, by the review's
   own measured arithmetic) at any trim level. Backlog #48 (the interim VM
   path, ADR 0035) closed as **superseded, not Done**. What survives,
-  unbundled from multi-node and executed on **one node** instead: **Cilium**
-  replacing flannel with Hubble flow observability (ADR 0023) and the
-  project's first NetworkPolicies (#49/#50), via a deliberate, rehearsed
-  full-cluster rebuild — a CNI swap needs one either way, with or without
-  a second node. Backlog #23a (backup/restore) is a hard prerequisite and
-  is **Done** as of 2026-08-04 (platform#62, ADR 0030) — a real restore
-  drill with a measured RTO, on-node only, with single-disk loss accepted
-  explicitly (backlog #99 converts that acceptance into a real off-site
-  copy). **Neither Cilium nor Istio is deployed anywhere in this cluster
-  today** — Cilium remains queued behind the rebuild above; the **Istio
-  ambient mesh is superseded, not deferred** (backlog #59-#62), replaced
-  by app-level fail-fast (#43/#105, un-deferred: a timeout budget on
-  `api`'s Kafka producer `max.block.ms` and a Resilience4j circuit
-  breaker on its outbound `clinvar-service` call) — istiod alone
-  (500m/2048Mi) is roughly ten times this machine's real remaining
-  headroom. **Replicated storage (#51) and node-drain/rolling-upgrade
-  drills (#52) stay Blocked (hardware), honestly** — both are
+  unbundled from multi-node and executed on **one node** instead: **Cilium
+  replacing flannel with Hubble flow observability (ADR 0023) is live** —
+  see "Network dataplane" above for the real, verified account. #50 (the
+  project's first NetworkPolicies) is the one real piece of M7's
+  network-dataplane half still open — Cilium's policy engine is ready,
+  nothing is enforced on it yet. Backlog #23a (backup/restore) was the
+  hard prerequisite for the rebuild and is **Done** as of 2026-08-04
+  (platform#62, ADR 0030) — a real restore drill with a measured RTO,
+  proven live again during the actual rebuild for all three PostgreSQL
+  instances and Prometheus's 30-day history, zero data loss confirmed.
+  The **Istio ambient mesh is superseded, not deferred** (backlog
+  #59-#62), replaced by app-level fail-fast (#43/#105, un-deferred: a
+  timeout budget on `api`'s Kafka producer `max.block.ms` and a
+  Resilience4j circuit breaker on its outbound `clinvar-service` call) —
+  istiod alone (500m/2048Mi) is roughly ten times this machine's real
+  remaining headroom. **Replicated storage (#51) and node-drain/rolling-
+  upgrade drills (#52) stay Blocked (hardware), honestly** — both are
   definitionally impossible on one node (nowhere to reschedule to,
   nothing to drain to), not faked or deleted.
 - **M11 AI-Assisted SRE** — an `sre-agent` over the project's own
