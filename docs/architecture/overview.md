@@ -14,8 +14,11 @@ planned multi-node move doesn't fit this machine — backlog #48 closed as
 superseded, not Done. **Cilium/Hubble (#49) went live on one node via a
 deliberate cluster rebuild, 2026-08-10** — see "Network dataplane"
 below; #50 (the project's first NetworkPolicies, on Cilium's now-live
-policy engine) is the one real piece of that pair still open. The
-multi-node substrate itself (replicated
+policy engine) is enforced today for every real in-cluster minimum
+flow across five real batches (`api`/`clinvar`/`workers`/`alloy`/
+Prometheus) — Alertmanager and the NCBI/GitHub public egress remain a
+real, stated, temporarily-unenforceable gap (an open upstream Cilium
+DNS-proxy bug). The multi-node substrate itself (replicated
 storage #51, node-drain/rolling-upgrade drills #52) and the Istio ambient
 mesh (#59-#62, superseded by app-level fail-fast, #43/#105) stay
 **blocked-on-hardware, no date** — real, ADR-recorded decisions
@@ -114,8 +117,8 @@ separately rehearsed before going live on the real cluster; a stated
 deviation, not a silent one, kept honest here rather than only in the
 backlog). Cilium 1.20.0 (`argocd/apps/cilium.yaml`) now owns the
 CNI, kube-proxy's service load-balancing (`kubeProxyReplacement`, eBPF,
-no iptables), and — once #50 lands — the cluster's only NetworkPolicy
-engine. Hubble flow observability is enabled and live: `hubble-relay`
+no iptables), and — via #50's now-live policies — the cluster's only
+NetworkPolicy engine. Hubble flow observability is enabled and live: `hubble-relay`
 aggregates per-agent flows, `hubble-ui` gives a real flow map (exposed
 at `hubble.local.adamastorx.test`, same Traefik/adamastorx-ca Ingress
 pattern as every other UI here), and a dedicated `hubble` Prometheus
@@ -138,9 +141,10 @@ copy) — not a real config difference, checked directly against the
 actual chart render before being written down here as expected rather
 than investigated as a bug.
 
-**#50's NetworkPolicies — four batches live (2026-08-10,
+**#50's NetworkPolicies — five batches live (2026-08-10,
 `clinvar-network-policies` + `api-network-policies` +
-`workers-network-policies` + `alloy-network-policies`)**:
+`workers-network-policies` + `alloy-network-policies` +
+`prometheus-network-policies`)**:
 `clinvar-service`/its own PostgreSQL and `api`/its own PostgreSQL/Redis
 each runs a real `CiliumNetworkPolicy` default-deny batch, explicit
 allows derived from live `hubble observe` captures cross-checked
@@ -173,15 +177,33 @@ platform#158) is also live — `alloy`, no ingress at all (nothing
 legitimately calls it, confirmed live), egress DNS + Loki:3100 +
 `toEntities: host` for its own Kubernetes API discovery. Verified with
 a real Loki query post-apply: 505 real log lines from `alloy` over a
-3-minute window, zero drops, zero restarts. Every real minimum flow
-#50 names for `api`/`clinvar`/`workers`/`alloy` is now live and
-verified; still open: Prometheus→every scrape target (`prometheus`
-namespace still runs unrestricted — a larger, deliberately
-not-yet-rushed piece: 4 pods with different real needs, one of them,
-`alertmanager`, has its own live `ntfy` webhook egress in the same
-`toFQDNs`-blocked class as NCBI/GitHub, planned to be left out of
-default-deny entirely rather than silently break real alerting) and
-the NCBI/GitHub `toFQDNs` gap. Cross-node routing, WireGuard
+3-minute window, zero drops, zero restarts. A fifth batch
+(`prometheus-network-policies`, platform#159) is also live — by far
+the largest fan-out of any policy this item has written:
+`prometheus-server` gets ~20 real egress rules (every scrape target,
+at its real container port, not the Service port) plus one
+`toEntities: host` rule covering everything that's either the node
+itself or a `hostNetwork` pod sharing Cilium's `reserved:host`
+identity with no distinct endpoint of its own (node-exporter,
+cilium-operator, hubble-metrics, and — a real surprise found and
+root-caused, not left unexplained — Beyla, whose ClusterIP Service
+DNATs to its own `hostNetwork` pod); `kube-state-metrics` gets DNS +
+its own Kubernetes API egress + ingress from `prometheus-server`/
+kubelet. `node-exporter` gets no policy (hostNetwork, unenforceable);
+`alertmanager` gets no policy either, deliberately — a real, live,
+already-active `ntfy` webhook egress in the same `toFQDNs`-blocked
+class as NCBI/GitHub, except breaking it would kill real alerting,
+left unrestricted until the upstream bug is fixed. Verified live
+immediately after apply: all 35 real Prometheus scrape targets stayed
+`up`, zero restarts on any of the 4 real pods in the namespace, zero
+Hubble drops, and a real end-to-end check — Grafana's own datasource
+querying Prometheus through the new ingress rule and getting real data
+back. Every real minimum flow #50 names for
+`api`/`clinvar`/`workers`/`alloy`/`prometheus` is now live and
+verified; the one remaining real, stated, temporarily-unenforceable
+gap is public egress (`alertmanager`→`ntfy.sh`, `clinvar-service`→NCBI,
+`api`→GitHub), blocked on the same open upstream Cilium DNS-proxy bug.
+Cross-node routing, WireGuard
 node-to-node encryption, and multi-node identity propagation remain
 real but small gaps this single node genuinely cannot exercise (ADR
 0040 §1) — not a Cilium limitation, a hardware one.
@@ -413,9 +435,11 @@ softened; the live description is at the top of this document.
   replacing flannel with Hubble flow observability (ADR 0023) is live** —
   see "Network dataplane" above for the real, verified account. #50 (the
   project's first NetworkPolicies) is enforced today for every real
-  in-cluster minimum flow it names (`api`/`clinvar`/`workers`/`alloy`) —
-  see "Network dataplane" above; Prometheus scrape targets and the
-  NCBI/GitHub `toFQDNs` gap remain open. Backlog #23a (backup/restore) was the
+  in-cluster minimum flow it names across five real batches
+  (`api`/`clinvar`/`workers`/`alloy`/`prometheus`) — see "Network
+  dataplane" above; public egress (`alertmanager`→ntfy.sh, NCBI,
+  GitHub) remains the one real, stated, temporarily-unenforceable gap.
+  Backlog #23a (backup/restore) was the
   hard prerequisite for the rebuild and is **Done** as of 2026-08-04
   (platform#62, ADR 0030) — a real restore drill with a measured RTO,
   proven live again during the actual rebuild for all three PostgreSQL
