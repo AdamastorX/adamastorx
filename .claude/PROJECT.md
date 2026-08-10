@@ -147,8 +147,15 @@ the standard-of-care subset, not the whole milestone; #98–#103 are new
 surface themselves and sit outside the gate deliberately. M11
 (`sre-agent`) is sequenced after M15
 deliberately (its evaluation needs the retention window), not cancelled;
-M7's hardware gate stands, with #104 recording an explicit
-dedicated-host-vs-VM-interim decision.
+M7's hardware gate stands for the pieces that are genuinely multi-node
+(replicated storage #51, node-drain drills #52, the Istio mesh). #104
+recorded an explicit decision on this (2026-08-08, ADR 0035: a VM
+interim, not a dedicated host) — since superseded by ADR 0040's own
+real capacity math, the same measurement that closed #48 as
+superseded: the VM interim doesn't fit this machine either, so the
+dedicated-host-vs-interim question is open again in practice, even
+though #104 itself stays closed as Done (it recorded a real decision,
+just not the one still standing).
 
 See `docs/architecture/overview.md` for the detailed real/live-vs-not-yet
 breakdown, `docs/roadmap/milestones.md` and `docs/SESSION_STATE.md` for
