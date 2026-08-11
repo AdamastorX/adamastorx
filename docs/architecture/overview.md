@@ -284,6 +284,21 @@ computed and requested 3 replicas (only 1 actually scheduled — see the
 CPU-headroom note below), and the running replica alone drained the
 backlog to zero lag within ~90s.
 
+**VPA, recommendation-only (backlog #101, 2026-08-11)**: `vpa`
+(`argocd/apps/vpa.yaml`, `fairwinds-stable/vpa` chart, recommender
+component only) plus `vpa-objects` (`argocd/apps/vpa-objects.yaml`,
+50 real `VerticalPodAutoscaler` objects, one per real workload,
+`updateMode: "Off"`) are both live. Real, immediate recommendations
+already flowing (`RecommendationProvided: True` on multiple objects
+within minutes), though still low-confidence given how little real
+usage history has accumulated. The AC's dashboard/report and first
+real adjustment cycle are deliberately not built yet — the recommender
+turned out not to expose per-container values as a Prometheus metric
+at all (only internal quality histograms), and kube-state-metrics
+(already live, #92) doesn't support the `VerticalPodAutoscaler`
+resource type either, confirmed live rather than assumed — both wait
+on the underlying data maturing regardless, not on more engineering.
+
 **Known gap:** Kafka's own memory limit was raised 768Mi→1536Mi
 (backlog #75) after a real, timestamp-aligned OOMKill during a consumer-
 lag chaos scenario, but the root cause (accumulating unconsumed backlog
