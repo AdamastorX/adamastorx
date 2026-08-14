@@ -223,3 +223,30 @@ another node — is observed directly, not assumed.
   request shape, and Cloudflare Tunnel/public DNS exposure are all
   explicitly parked behind this milestone — real, tracked, not
   forgotten, but M4 goes first per the converged five-persona survey.
+
+## Addendum (2026-08-14): the ~90s baseline was real, not fabricated — but stale
+
+This ADR's own §Context (and the `ClinVarIngestionDurationAnomaly` alert
+it specified, `platform/argocd/apps/prometheus.yaml`) stated a ~90s
+real-data baseline for a full ingestion's slowest step, sourced from the
+real double-ingestion incident this whole metrics surface exists to
+catch. That number was real when written, not guessed — but ClinVar's
+own real data has grown since: two independent, real, full-scale
+ingestion runs closing out backlog #122/#131/#132 (2026-08-12's first
+successful run and 2026-08-14's fifth-attempt success, after real
+memory fixes to the ingestion pipeline) both measured **~7 minutes
+(~416-420 real seconds)** end to end against the current real
+4,461,717-record VCF, not ~90s. The second of those two runs tripped
+`ClinVarIngestionDurationAnomaly` for real (`activeAt: 2026-08-14
+16:59:01Z`) — not because backlog #132's memory-safety fixes made
+ingestion slower (the two real measurements, before and after those
+fixes, are within 1% of each other: 420s and 416s), but because the
+alert's own baseline was never re-measured against real full-scale data
+before this. This ADR's own §Consequences already anticipated exactly
+this: "revisit once a real distribution of run durations exists" — that
+distribution now exists (two consistent, real, full-scale samples), so
+the alert's baseline is corrected in `platform`#174 to ~420s real
+(anomaly threshold recalibrated proportionally, "several times longer"
+against the real number instead of the stale one), rather than treated
+as a regression to chase back down to a number that was never true at
+today's real data scale.
