@@ -75,7 +75,15 @@ definitions:
   observable "In Progress, no PR yet" state a native trigger can detect,
   so a linked PR is the first mechanically-detectable signal, and it
   already means "awaiting review" in practice, not just "started."
-- **Pull request merged** → `Done`.
+- **Pull request merged** → `Done`. `project-board.md`'s own column
+  definition is stricter than this — "Merged **and verified**" — and a
+  merge alone doesn't always mean that (the same real gap the
+  `Auto-close issue` decision below addresses for the issue itself). The
+  same asymmetry the ADR uses to justify leaving auto-close disabled
+  argues for accepting this one: a status is cheap and reversible (a
+  human drags the card back on discovering the merge wasn't actually
+  sufficient), where a closed issue is not. Set to `Done` as a real,
+  useful default with that gap stated plainly rather than glossed over.
 - **Item closed** → `Done`. Covers the real cases that don't go through a
   merged PR at all — `Won't do (superseded)`, duplicates, `Blocked`
   closures — the same real statuses this backlog already uses honestly
@@ -102,8 +110,9 @@ kind of decision this project's own process should keep making
 deliberately, not the kind that should be automated away. Automation
 covers the two mechanical, judgment-free ends of a card's life (it
 exists; it's finished); the middle stays a real kanban-drag a human does
-on purpose, matching the same distinction ADR 0031's Definition of Ready
-already draws.
+on purpose, matching the same distinction `.claude/PROJECT.md`'s own
+Definition of Ready already draws (dependencies resolved, acceptance
+criteria written — a real editorial call, not a mechanical one).
 
 No CI-based enforcement (e.g. a check requiring a `Persona:` commit
 trailer on architecture-labeled PRs, considered as an alternative
