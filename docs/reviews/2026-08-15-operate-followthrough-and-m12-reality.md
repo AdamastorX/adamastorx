@@ -386,7 +386,100 @@ fail it? Checked honestly:
 
 ---
 
-## 10. Review of this review (2026-08-15, before merge)
+## 10. Stack evaluation: is the technology inventory still in line with the founding objectives?
+
+The owner asked a companion question to the operational findings above:
+**is the stack itself still aligned with the four founding objectives —
+(1) an observability pipeline fed with real data, (2) microservices/
+distributed-systems depth, (3) a lab/playground for state-of-the-art and
+established tech, (4) articles to grow a public SRE reputation — or is it
+collecting technologies faster than it extracts depth from any of them?**
+This is the technology-inventory companion to §1's operate-gap finding, and
+it lands the same way: the *spine* is genuinely earning its keep; the last
+expansion phase (ADR 0022, "breadth for content") bolted on a cluster of
+experiment components that consume the scarcest resource on the node while
+producing signals nothing consumes.
+
+**The live inventory is ~46 ArgoCD Applications across 33 namespaces.** I
+sorted every always-on component into "exercised for real" vs. "deployed and
+idle" using the same test §1 used — not "does it run" but "does it produce a
+signal, an incident, or an article anyone actually consumed." Verified via
+`kubectl get applications`, `kubectl top pods -A`, `kubectl get vpa -A`, and
+the observability repo's real dashboard/runbook tree.
+
+**Earning its keep — real depth, real incident history, serves objectives
+1/2 (and 4 when written up):**
+
+| Component(s) | Objective | Evidence it is exercised, not decorative |
+|---|---|---|
+| k3s, ArgoCD, Terraform, Helm, GH Actions | 2 | The delivery spine; a real Cilium-driven cluster rebuild 5 days ago flowed through it (#49) |
+| Kafka (KRaft), PostgreSQL, Redis, Spring Boot | 2 | Outbox+relay (#53), Kafka Streams (#81), two real RocksDB incidents (#85); the services need them for real reasons (PROJECT.md), not for show |
+| Prometheus, Grafana, Loki, Tempo, OTel, Alloy | 1 | 20 live alert rules, ~19 runbooks, the intact 30-day SLO clock (§3); this is objective 1, and it is real |
+| Cilium | 2/3 | Real CNI (#49), default-deny policies (#50), a genuine upstream-bug track record — though the policy rollout stalled at 5/28 namespaces (#126) |
+| Argo Rollouts, KEDA | 2 | `api` canary with an automated SLO-analysis gate (#46); `workers` autoscaling on real Kafka lag (#63) |
+| M13 pipeline (news/market-data/sentiment/aggregator/visualizer) | 1/2 | Real WSJ/Finnhub/VADER data; but carries the standard-of-care debt §1 and #90/#91 name — `market-data-ingestor` reconnect-stormed to **34 restarts** unwatched |
+
+**Deployed and mostly idle — the expansion-phase experiments, serving
+objective 3 in its shallowest sense (present, not exercised):**
+
+| Component | Live cost | The honest read |
+|---|---|---|
+| **Beyla** | **823Mi RSS, 164m CPU** — the heaviest tenant on the node after Prometheus and Kafka | An A/B experiment (ADR 0036) vs. the manual OTel stack, running with broad `SYS_ADMIN`/`hostPID`/`hostNetwork` privilege. **No dashboard, alert, or runbook consumes its RED metrics.** The comparison *is* a strong objective-3/4 article — but it is unwritten, so today Beyla is ~800Mi of the scarcest resource on a node ADR 0041 found OOMing, spent on a signal nothing reads. The single most expensive idle component in the stack. |
+| **Mimir** | **734Mi RSS, 30 restarts** | ADR 0038 already reached the honest verdict — *"not yet worth it as a standing piece at this scale"* — a second query surface no one queries, no dashboard, its own documented rollback path. Its one redeeming use: the sre-agent grading bundles (#128) are all Mimir scenarios. That is synthetic, not live-incident, value. |
+| **Faro** | cheap (rides Alloy) | RUM receiver for two static frontends; no evidence of consumed data. Low footprint, low value. |
+| **VPA** | cheap (69Mi-class) | Runs in **`Off`/recommendation-only mode** — it produced right-sizing numbers 4 days ago that nothing consumes. Its output is exactly the raw material #127's component budget wants, but it is read by no one. |
+| Pyroscope | **69Mi RSS** — genuinely cheap | Real SDK injection (ADR 0028), motivated by a real incident (#35). Under-exercised since, but too cheap to be worth touching. The one experiment whose cost/value ratio is defensible as-is. |
+
+**The composition finding, stated plainly:** objectives 1 and 2 are *well*
+served and deeply exercised — the observability spine and the Kafka/
+distributed-systems core both have real incident history behind them.
+Objective 3 ("lab/playground") is the objective being *over*-served, and it
+is served shallowly: Beyla + Mimir alone are ~1.5GiB of live RSS — the two
+heaviest tenants after Prometheus and Kafka — spent on signals no consumption
+surface exists for, on the exact node §3/ADR 0041 measured at 114%
+memory-limit overcommit and swapping at rest. The one objective that would
+*redeem* those experiments — objective 4, writing the comparison up — is the
+same deferred-forever item §1 documents. The stack is not spread too thin at
+the spine; it is spread thin at the frontier, and the frontier is the part
+the hardware ceiling can least afford.
+
+**Recommendation — focus, don't expand. Deepen these 4 before anything new:**
+
+1. **The observability spine + M13 pipeline** (objective 1). Close #90/#91's
+   missing dashboards/SLOs and the #125 restart alert. This is where real
+   usage already lives; it is under-instrumented relative to its centrality.
+2. **The Kafka/distributed-systems core** (objective 2) — Rollouts, KEDA,
+   outbox, Streams. Deepest real depth, richest article material (the #84/#85
+   RocksDB saga, the #122/#130/#131 multi-cause incident). Write it up (#129).
+3. **Cilium NetworkPolicies past 5 namespaces** (#126) — real security depth
+   already begun, free on the eBPF datapath (§6).
+4. **The 30-day SLO-over-time report** (#94) — §3 already names it the single
+   most differentiated thing the project can publish.
+
+**And stop investing / consolidate here — this is the technology-inventory
+half of #127's component budget, and it is the most direct relief for the
+hardware ceiling every other finding fights:**
+
+- **Beyla: harvest the A/B article now, then decommission.** It is the
+  clearest over-investment in the stack — the heaviest idle tenant, the
+  broadest privilege, on the tightest resource. Extracting the comparison
+  (objective 4) and then removing it frees ~800Mi directly against ADR 0041's
+  ceiling. This is the "extract the depth, then consolidate" move objective 3
+  should always end in, and never has here.
+- **Mimir: stop investing; keep only as long as it substrates the sre-agent
+  bundles.** ADR 0038 already wrote the rollback path. If #128's grading moves
+  off Mimir scenarios, decommission per that ADR — 734Mi and 30 restarts is a
+  large standing cost for an experiment whose own verdict was "no."
+- **Faro / VPA: leave as-is (cheap), invest no further.** Feed VPA's
+  right-sizing output into #127 rather than leaving it as standing decoration.
+
+This is deliberately consistent with §8 ("do not add any new always-on
+component this stretch") and §4 (do not add MinIO/`metadata-service`): the
+call is not "add more lab toys," it is **extract the article-shaped depth
+from the experiments already deployed, then consolidate the two heaviest of
+them to buy back the headroom M12 and everything else is starved for.**
+
+## 11. Review of this review (2026-08-15, before merge)
 
 Every load-bearing claim here was read off the live cluster or the real
 repos during this review. Findings, including corrections to the briefing
@@ -432,3 +525,22 @@ that seeded it:
    flowing) but its backlog entry carries no Done marker and I did not read
    the code to confirm the watchdog fix landed — flagged as
    apparently-open, not asserted either way.
+8. **§10's stack evaluation is a footprint-and-consumption read, not a
+   line-by-line code audit of every component.** The "idle vs. exercised"
+   sort rests on live evidence I *can* verify without mutating anything —
+   `kubectl top pods` RSS/CPU, VPA mode, restart counts, and the presence or
+   absence of a Grafana dashboard / alert rule / runbook that references each
+   component (checked against the observability repo's real tree, where no
+   dashboard, alert, or runbook names Beyla, Mimir, Faro, or VPA). What it
+   does **not** do is prove a signal is *never* looked at ad-hoc in Grafana's
+   explore view — "no standing consumption surface" is the claim, not "no
+   human has ever run the query." Beyla's and Mimir's cost figures are single
+   point-in-time `top` readings, consistent with their VPA memory
+   recommendations (1168Mi / 1102Mi) but not a sustained average. The
+   consolidation calls (decommission Beyla after harvesting its article; hold
+   Mimir only for the sre-agent bundles) are judgment on that evidence, not a
+   verified reversibility test — both ADRs (0036/0038) carry their own stated
+   rollback paths, which is what makes the recommendation cheap to act on, but
+   I did not execute either. The section is deliberately scoped to not
+   contradict §4 (M12), §6 (ceiling), or the open #127; where they overlap it
+   defers to them and adds only the technology-inventory lens.
