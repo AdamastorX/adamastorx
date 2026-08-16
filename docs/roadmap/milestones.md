@@ -27,6 +27,7 @@ state.
 | **M13 Real-Time Market Sentiment Pipeline** | Real, continuously-flowing external market data — live stock prices and financial news sentiment for a fixed watchlist, decomposed into five Kafka-backed services (ADR 0029) — the flagship real-workload demo for the M7 hardware substrate; revives #55's stateful stream processing on a friendlier domain. |
 | **M14 Reach and Packaging** | The project becomes publicly presentable: the top-level narrative doc a first-time reader can land on (#31), public read-only access to the live system, and an article-asset habit. No new runtime components (ADR 0031). |
 | **M15 Consolidation: Operate What You Built** | Close the gaps the expansion phase opened — every shipped service gets its dashboards/SLOs/alerts including the pipeline freshness SLO, Kafka durability is re-decided against the system that exists now, long-term retention enables SLO reporting over time, and dependency/backup/secrets hygiene is automated. No new application services (ADR 0031). |
+| **M16 Canary + SLO Operational Maturity** | Exercise and calibrate the canary-deployment and SLO machinery that already exists (#46, ADR 0020) — a recurring, dated drill cadence, real threshold calibration once #94's 30-day retention window closes, and an article evidence pack. Zero new components (ADR 0043). |
 
 M6–M9 are the expansion phase (ADR 0022). The goal changed — breadth and
 novelty, on top of the tight core ADR 0021 produced — and ADR 0022 states
@@ -120,3 +121,13 @@ A milestone is Done (Definition of Done, `.claude/PROJECT.md`) when every
 item in it is closed — that gate is unchanged. What's relaxed is only the
 assumption that work on the *next* milestone can't begin until then;
 individual items can start as soon as their own dependencies clear.
+
+**M16 (ADR 0043) follows M15 in the table above but is not gated on M15
+closing as a whole** — the same relaxed-sequencing rule applies here
+without a new exception. Its drill-cadence item (#136) depends only on
+#46 and #45 (both Done) and starts immediately. Its calibration and
+article items (#137/#138) hard-depend on #94's real 30-day retention
+window, which does not close until ~2026-09-06 regardless of when M16
+opens — a calendar floor, not a milestone-ordering one. M16 deliberately
+adds no new component and does not gate M11 (`sre-agent`), which stays
+sequenced after M15 per ADR 0031 for its own, unrelated reason.

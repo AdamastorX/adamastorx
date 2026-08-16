@@ -1323,3 +1323,43 @@ Guiding cut/keep calls (the reasoning; the actions are S1–S7 below):
 - Acceptance Criteria: a real, stated decision on Mimir's future tied to a concrete, checkable event rather than a vague "someday" — the recommended trigger (owner may pick a different one): once #128's grading corpus incorporates enough non-Mimir bundles (per #128's own AC, at least three new ones from the Cilium DNS-proxy incident, the #122 rebuild aftermath, and one of #85/#86's silent-but-Healthy crashes) that Mimir-sourced scenarios are no longer load-bearing for the grading exercise, Mimir is decommissioned per ADR 0038's already-written rollback path. Until that trigger fires, Mimir stays deployed and untouched — this item does not decommission anything itself, it only makes the decommission condition real and checkable instead of implicit. Recorded as an ADR 0038 addendum or a #127-style component-budget entry, whichever fits its existing structure better.
 - Dependencies: #128 (the trigger condition), #127 (the mechanism this item's decision feeds).
 - Priority: P2. Labels: `platform`, `observability`, `architecture`.
+
+## M16 Canary + SLO Operational Maturity (ADR 0043)
+
+Backlog #46 (Argo Rollouts canary + automated Prometheus SLO gate on `api`)
+is Done, proven live in both directions. ADR 0020's SLO table and
+`analysistemplate.yaml`'s own p95 threshold both carry the same stated
+caveat: not tuned against a real historical distribution, because that
+distribution didn't exist yet. #94 (M15) is what makes it exist — its
+30-day retention window closes ~2026-09-06. M16 is narrowly scoped to
+what the 2026-08-11 staff review's own verdict allows this stretch:
+exercising and calibrating the canary+SLO machinery that already exists,
+producing a dated series of real operational events, with **zero new
+components** — not extending Argo Rollouts to more services, not Istio
+traffic routing, not reopening #21b's closed burn-rate policy. See
+ADR 0043 for the full reasoning, including why each of those three was
+deliberately left out.
+
+M16 is not gated on M15 closing as a whole. #136 has no dependency and
+starts immediately; #137 (and, downstream, #138) hard-depend on #94's
+real calendar close (~2026-09-06) — a floor nothing here can pull
+forward. M16 does not gate M11 (`sre-agent`), still sequenced after M15
+per ADR 0031.
+
+**136. A recurring canary drill cadence against `api`'s existing Rollout**
+- Purpose: #46 proved the canary+analysis mechanism works, once, in a pre-merge test on 2026-07-30 (clean promotion in 2m56s; automatic abort reproducing the real #35 95-minute-CrashLoopBackOff shape in 3m01s). A single proof is a demo; per ADR 0043 and the 2026-08-11 staff review's §3d verdict ("the project's next differentiating asset is not a component; it is a dated series of real operational events with real response times and honest outcomes"), a recurring, dated series of drills is what actually generalizes that one proof into operational evidence.
+- Acceptance Criteria: no new Rollout, AnalysisTemplate, or dashboard — every drill uses the exact mechanism `platform/docs/runbooks/canary.md` already documents (`kubectl argo rollouts get/promote/abort/retry`, gated by the existing `api-slo-check` AnalysisTemplate). At minimum one drill per operations-review cycle once #124 (the standing operations review) is running, reusing that cadence rather than inventing a second one, alternating a clean-promotion run and an induced-fault run (the #35 shape or another real, already-known fault) so the abort path stays exercised, not just the happy path. Each drill's real outcome (elapsed time, abort/promote reason, explicit comparison against the #46 baseline: confirms it or names a real divergence and why) appended as a dated postscript to `canary.md`'s existing "Live verification" section — the same postscript pattern #47 already established for the chaos-scenario fact packs. A drill made ambiguous by the known whole-Service-scrape limitation (`rollout.yaml`'s own stated gap: analysis can't always distinguish "new pod bad" from "old pod worse") is recorded as ambiguous, honestly, not smoothed into a clean result it wasn't.
+- Dependencies: none — #46 and #45 (both Done) are all this needs; can start immediately, independent of #94's timeline.
+- Priority: P2. Labels: `platform`, `observability`.
+
+**137. Real SLO threshold calibration from #94's closed 30-day window**
+- Purpose: two files carry the identical stated caveat today — ADR 0020's SLO table ("not picked in the abstract in this ADR... once the histogram/lag metrics are live") and `analysistemplate.yaml`'s own comment on its 1000ms p95 threshold ("not tuned against a real historical distribution yet... revisit once a real p95 distribution exists to tune against"). #94 is what makes that distribution real. This item is the follow-through both caveats already promised, not a new commitment.
+- Acceptance Criteria: every ADR 0020 threshold still carrying the un-tuned caveat is revisited against #94's real accumulated data (project-wide, not `api`-only, since the caveat is stated project-wide). The concrete, highest-value instance: `analysistemplate.yaml`'s `p95-latency-seconds` `successCondition: result[0] <= 1.0` replaced with a value derived from `api`'s real p95/p99 distribution over the closed 30-day window, computed the same way #94's own report computes it. Recorded as a dated ADR 0020 addendum — the exact pattern ADR 0020 already used on itself (2026-08-14, correcting the stale ~90s ClinVar ingestion baseline to a real ~420s): old value, new value, the real distribution it was derived from (with enough of #94's numbers quoted to be checkable), and the `analysistemplate.yaml`/alerting-rules change landing in the same PR. A threshold changed with no addendum is exactly the "quietly edited with no trail" outcome this item exists to prevent.
+- Dependencies: #94 — hard-gated on its real 30-day window closing (~2026-09-06). Cannot start early; nothing here accelerates a calendar.
+- Priority: P2. Labels: `observability`, `architecture`.
+
+**138. A canary-and-SLO article, evidence assembled from #136/#137/#46**
+- Purpose: backlog #129 already names the mechanism (an article cadence with named targets) and already has three targets queued. This item adds a fourth, sourced entirely from real data this milestone's own items produce — consistent with #129's own bar that no article starts from a blank page.
+- Acceptance Criteria: one evidence pack combining #136's real dated drill outcomes, #137's real old-vs-new threshold calibration, and #46's already-proven clean/abort timings into a single article (e.g. "what a canary gate actually catches, measured against real thresholds instead of a guess"), added to #129's queue using its existing evidence-linking convention (links checkable in-repo evidence rather than restating claims). No new evidence-gathering step of its own — assembled from what #136/#137 already produced.
+- Dependencies: #136, #137 (needs both items' real output; in practice this means after #94 closes, and after #136's drill series has accumulated more than one dated entry).
+- Priority: P3. Labels: `documentation`.
