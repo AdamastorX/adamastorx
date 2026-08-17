@@ -250,3 +250,53 @@ the alert's baseline is corrected in `platform`#174 to ~420s real
 against the real number instead of the stale one), rather than treated
 as a regression to chase back down to a number that was never true at
 today's real data scale.
+
+## Addendum (2026-08-17): api's canary p95 threshold, calibrated against real data — explicitly preliminary
+
+Backlog #137 (M16, ADR 0043) is the follow-through this ADR's own
+§SLOs table promised: "error budgets and exact thresholds are set from
+each service's real current traffic/latency distribution ... not
+picked in the abstract in this ADR." `platform/kubernetes/api/
+analysistemplate.yaml`'s `api-slo-check` p95 threshold — 1000ms,
+stated openly at the time as a generous, untuned placeholder (backlog
+#46) — is the first threshold in this table to get that follow-through,
+now that backlog #94's 30-day Prometheus retention (live since
+2026-08-07) has real data behind it.
+
+**Old value**: 1000ms (`api-slo-check`, `p95-latency-seconds`).
+
+**New value**: 500ms (`platform`#187).
+
+**Real data it's derived from, and a real finding along the way**: a
+naive `histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket
+{job="api", uri!~"/actuator.*"}[10d])) by (le))` over the full 10 real
+days retained so far returns 0.167s p95 / 4.73s p99 — but a day-by-day
+breakdown (`histogram_quantile(..., [1d])` sampled once per real day)
+shows this aggregate is contaminated by two already-documented
+incident days: **2026-08-12 (p95 0.97s) and 2026-08-13 (p95 3.22s,
+daily peak 4.40s)**, both squarely inside backlog #122's real OOM/
+canary-deploy saga — not healthy steady state, and not representative
+of what a canary gate should treat as "normal." Excluded with a stated
+reason, the same way `ArgoCDAppOutOfSync`'s runbook already excludes
+its own six known-benign names rather than silently averaging noise
+into a threshold. The **clean post-incident window** (2026-08-14
+00:00Z onward, ~90h, ~101,295 real request samples) gives **p95 =
+0.148s, p99 = 0.247s** — the number this addendum actually calibrates
+against. 500ms is roughly 2x that real clean p99: generous margin
+against legitimate variance this short window hasn't seen yet, while
+still meaningfully tighter than the old 1000ms placeholder and
+comfortably catching real degradation of the #122 incident-day shape
+(0.97s–4.40s) if it recurred.
+
+**Explicitly PRELIMINARY, not the final calibration this table's
+caveat still owes**: only ~4 clean days sit behind the 500ms number,
+against backlog #94's own 30-day design target (closing ~2026-09-06).
+The naive-vs-clean-window gap found here is itself evidence a short
+window can mislead in either direction — a longer, more representative
+sample could move this number again once #94's report exists to derive
+it from, and that reconciliation is real remaining scope for backlog
+#137, not silently treated as closed by this addendum. If the final
+number differs meaningfully from 500ms, this ADR gets a third
+addendum recording old value, new value, and why — the same pattern
+this section and the one above it both already established, not a
+one-off exception.
