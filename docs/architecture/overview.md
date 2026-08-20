@@ -217,6 +217,27 @@ node-to-node encryption, and multi-node identity propagation remain
 real but small gaps this single node genuinely cannot exercise (ADR
 0040 §1) — not a Cilium limitation, a hardware one.
 
+**backlog #126, first batch (2026-08-21, `kafka-network-policies`,
+platform#193)**: `kafka`'s own ingress was wide open to any pod in the
+cluster (ADR 0012: PLAINTEXT broker, no auth) — #50's own item named
+this as the one that should go first once its own five batches closed.
+Real ingress policy derived from a live `hubble observe --namespace
+kafka` capture, 9 real clients confirmed (`api`, `workers`,
+`watchlist-service`, `aggregator`, `sentiment-analyzer`,
+`market-data-ingestor`, `news-ingestor`, `keda-operator`, and
+`blackbox-exporter` — the last a real client this item's own AC didn't
+originally name, found only by the live capture). Port 9093 resolved
+to the kubelet's own `readinessProbe.tcpSocket`, not another client.
+Verified live, real end to end: `policy-enabled: both` confirmed
+immediately post-sync, a real `POST /work-items` produced through the
+new policy landed `PUBLISHED` in `api`'s own outbox, and the same
+message was confirmed consumed by `workers` on its next real KEDA
+scale-up cycle — zero new restarts anywhere in the cluster. The four
+M13 application namespaces and `watchlist` still need their own
+default-deny batches (their own ingress/egress, not just their
+egress-to-kafka this batch already covers) — real, tracked, remaining
+scope, not silently folded into "Done."
+
 **`api`** (Maven module in `services`, Spring Boot/webmvc/actuator) is no
 longer a plain Kubernetes `Deployment`: it is an Argo Rollouts **`Rollout`**
 with a canary strategy, gated by an `AnalysisTemplate` that queries the
