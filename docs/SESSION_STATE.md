@@ -6,7 +6,7 @@ threads, and things the next session shouldn't have to re-discover the
 hard way. Prune/rewrite freely as work completes; this file describes
 *current* state, not history (git history is the record of the past).
 
-Last updated: 2026-08-10.
+Last updated: 2026-08-20.
 
 ## Where things stand
 
@@ -320,3 +320,29 @@ verification discipline documented here, open PRs, wait for CI, then
 **stop without merging** — every PR merge needs explicit human
 confirmation, agents included, no exceptions. The orchestrating session
 reviews the diff and handles the merge once a human confirms.
+
+## `root`'s own refresh, not just the child's (found live, 2026-08-20, backlog #125)
+
+Merging a PR to `platform/argocd/apps/prometheus.yaml` and hard-
+refreshing the `prometheus` Application directly is **not enough** to
+get a new alert rule live — confirmed the hard way, real delay (~10+
+minutes lost narrowing it down). `root` (the app-of-apps root
+Application, ADR 0003) manages every child `Application` under
+`argocd/apps/` as one of *its own* tracked resources; if `root` itself
+hasn't detected the git diff on the child's spec, the child's own
+`spec.source.helm.valuesObject` stays stale no matter how hard you
+refresh the child — refreshing the child just re-confirms it's
+"Synced" against the stale spec it already has, not against `main`.
+
+Symptom: `kubectl get application prometheus -n argocd -o json | yq
+-p json '.spec.source.helm.valuesObject...'` shows old content even
+after `refresh=hard` on `prometheus`, while `git log` confirms the
+right commit is on `main`. Fix: `refresh=hard` on `root` itself first
+— check `kubectl get application root -n argocd -o jsonpath='{.status.
+sync.status}'` flips to a real `OutOfSync` (not already `Synced`), let
+its own `automated`+`selfHeal` sync fire, *then* refresh the child.
+This is the same class of finding `docs/runbooks/canary.md` already
+recorded for a *manually patched* Application spec — this one hit the
+same root-not-noticing-the-child's-diff shape from an entirely normal
+git-merge path, not a manual patch, so it's a real, recurring risk for
+any future alert-rule/dashboard change, not a one-off.
