@@ -6,21 +6,26 @@ root causes hiding behind them once I finally looked.*
 
 ## Why this exists
 
-My last post here described AdamastorX's core constraint: AI writes most
-of the code, I stay responsible for everything else — the architecture,
-the review process, and what happens when it breaks. This post is the
-sharpest test that framing has had yet, and it's the uncomfortable half:
-the code wasn't the problem this time. The alerting wasn't the problem
-either. I was.
+My last post here described AdamastorX's core constraint: AI writes
+essentially all of the code and runs essentially all of the actual
+verification, I stay responsible for everything else — the review
+process, what I choose to trust, and what happens when it breaks. This
+post is the sharpest test that framing has had yet, and it's the
+uncomfortable half: the code wasn't the problem this time. My agent's
+work wasn't the problem either — every fix in this post is real and
+correct. What failed was mine specifically: I read an all-clear I
+never pushed past component liveness, and then I didn't check again
+for four days.
 
 ## What was actually happening while nobody looked
 
-Five days earlier I'd rebuilt the cluster's CNI from scratch — a
-deliberate, rehearsed, from-Git rebuild to swap flannel for Cilium and get
-real network policy enforcement. Every check I ran afterward passed: 35 of
-35 Prometheus scrape targets up, `cilium status: OK`, Kafka consumer
-groups rejoined, three Postgres instances restored with matching row
-counts. I called it done and moved on to other work.
+Five days earlier my agent had rebuilt the cluster's CNI from scratch — a
+deliberate, rehearsed, from-Git rebuild I approved to swap flannel for
+Cilium and get real network policy enforcement. Every check it ran
+afterward passed: 35 of 35 Prometheus scrape targets up, `cilium
+status: OK`, Kafka consumer groups rejoined, three Postgres instances
+restored with matching row counts. I read that as done, never asked
+for anything past component liveness, and moved on to other work.
 
 Four days later, an independent review of the cluster (a habit I've built
 into this project on purpose — I don't just trust my own "looks fine")
@@ -51,20 +56,24 @@ once a second, for 34 hours straight — over 148,000 and 168,000 log lines
 respectively by the time anyone looked. The topic simply didn't exist on
 the rebuilt broker.
 
-Root cause, once I actually went looking: it had never been declared in
-the Kafka provisioning manifest, in any commit, ever. It existed on the
-old broker only because someone (me, weeks earlier) had created it
-manually at some point and it had just... persisted, silently
-undocumented, until a real rebuild wiped it along with everything else
-that wasn't in Git. This project's entire premise is that cluster state
-lives in Git — this was the gap in that premise, found the expensive way.
+Root cause, once my agent actually went looking: it had never been
+declared in the Kafka provisioning manifest, in any commit, ever. It
+existed on the old broker only because an earlier session had created
+it manually, live against the broker, weeks before — and it had just...
+persisted, silently undocumented, until a real rebuild wiped it along
+with everything else that wasn't in Git. This project's entire premise
+is that cluster state lives in Git — this was the gap in that premise,
+found the expensive way, and it's mine regardless of whose hands were
+on the keyboard the day it was created: nobody, me included, ever came
+back and turned that live fix into the commit it should have been.
 
 Fixed by adding it declaratively where it always should have lived. The
 sync itself didn't retrigger the provisioning job automatically (already
-`Synced`, no diff to act on), so I fell back to the documented manual
-path: `kafka-topics.sh --create --if-not-exists`, live, against the real
-broker. Confirmed within seconds: both services stopped logging the
-error, and `watchlist-service` showed a real partition assignment.
+`Synced`, no diff to act on), so my agent fell back to the documented
+manual path: `kafka-topics.sh --create --if-not-exists`, live, against
+the real broker. Confirmed within seconds: both services stopped
+logging the error, and `watchlist-service` showed a real partition
+assignment.
 
 ## Root cause 2: a Healthy pod giving 502s to everyone
 
@@ -85,12 +94,12 @@ That pattern — and the backlog item it's now produced, generalizing a
 per-service fix into an actual post-rebuild business-path checklist — is
 the most useful thing to come out of this incident, and it's still open.
 
-Fixed here by triggering a real ingestion (`POST
-/internal/clinvar/ingest`), watched to completion: ~7 minutes, 4.46
-million records scanned, 2.9 million index rows rebuilt, real files back
-on disk. `GET /variants/lookup?rsid=rs80357906` — the same test variant
-this project has used since its very first correctness check — came back
-`200`, real classification, `Pathogenic`.
+Fixed here by my agent triggering a real ingestion (`POST
+/internal/clinvar/ingest`) and watching it to completion: ~7 minutes,
+4.46 million records scanned, 2.9 million index rows rebuilt, real
+files back on disk. `GET /variants/lookup?rsid=rs80357906` — the same
+test variant this project has used since its very first correctness
+check — came back `200`, real classification, `Pathogenic`.
 
 ## Root cause 3: the comment that predicted its own failure
 
@@ -99,13 +108,13 @@ a value that changes on every cluster rebuild, since ClusterIPs aren't
 stable across a full re-provision. The file's own comment, written when
 that value was first hardcoded, said as much: this will need updating
 after a rebuild. It was still wrong when the rebuild actually happened,
-because a comment is a note to a human, not a mechanism, and I hadn't
-read it in months.
+because a comment is a note to a reader, not a mechanism.
 
-Fixed for now (corrected the IP, `BlackboxProbeFailing` dropped from 6
-firing targets to 1), with the real fix — something that can't drift the
-way a hand-typed IP can — recorded as future work rather than pretended
-away.
+Fixed for now (my agent corrected the IP, `BlackboxProbeFailing` dropped
+from 6 firing targets to 1), with the real fix — something that can't
+drift the way a hand-typed IP can — recorded as future work rather than
+pretended away. Nobody, human or agent, had reread that comment since
+the day it was written.
 
 ## Fixing it surfaced two more real bugs
 
@@ -131,10 +140,11 @@ constant traffic a live capture window happens to catch, so nobody had
 noticed the gap until this exact rollout needed it. Third abort, after
 that was fixed: a real metric failure, because the still-crashing *old*
 pod's own bad requests were polluting the shared latency aggregate the
-analysis was reading from. Once both were understood, I promoted the
+analysis was reading from. Once both were understood, my agent promoted the
 rollout directly rather than let it keep retrying against a metric the
 outgoing pod would keep contaminating for as long as it existed — a
-judgment call, made and recorded, not silently taken.
+judgment call I reviewed and signed off on, made and recorded, not
+silently taken.
 
 ## The alert that wouldn't clear
 
@@ -169,8 +179,8 @@ help, failed too — three consecutive failures with three different peak
 values is not bad luck anymore.
 
 That got written down honestly as an accepted, chronic constraint of this
-hardware rather than a bug to keep chasing — the same treatment I'd
-already given the CPU side of this node in an earlier ADR. But "the node
+hardware rather than a bug to keep chasing — the same treatment an
+earlier ADR had already given the CPU side of this node. But "the node
 is tight" turned out not to be the whole story. Two real, separate
 memory bugs were still hiding in the ingestion code itself, found by
 actually measuring where each attempt's memory trace peaked instead of
@@ -184,31 +194,40 @@ fifth real attempt, after both fixes, succeeded end to end.
 
 ## Healthy is not the same as working
 
-Here's the finding underneath all three root causes: every single check I
-ran right after the rebuild was a *component*-liveness check, and every
-one of them passed. Not one was a *business*-path check. A pod can be
-`Running`, `Ready`, scraped, and reporting `Synced` in ArgoCD while the
-actual thing it exists to do quietly doesn't work at all — three separate
-times, in the same 20-minute post-rebuild window, and my own checklist
-had no way to see any of them.
+Here's the finding underneath all three root causes: every single check
+my agent ran right after the rebuild was a *component*-liveness check,
+and every one of them passed. Not one was a *business*-path check —
+and I never asked for one. I read "35/35 targets up, `cilium status:
+OK`" as the story being over, the same way I'd read any green CI run,
+without stopping to ask whether green here actually meant what I
+assumed it meant. A pod can be `Running`, `Ready`, scraped, and
+reporting `Synced` in ArgoCD while the actual thing it exists to do
+quietly doesn't work at all — three separate times, in the same
+20-minute post-rebuild window — and neither my agent's checklist nor my
+own follow-up had a way to see any of them.
 
 That's the part no amount of AI code review would have caught, because
 it isn't a code problem. The commits were fine. The infrastructure
-definitions were fine. The gap was entirely in what I, the human in this
-loop, chose to verify — and then in the four days after that where I
-verified nothing at all, because I'd already decided the story was over.
-An AI wrote clean Kubernetes manifests and clean Java. It did not, and
-structurally cannot, notice that nobody read the pager for four days.
-That part is still, entirely, mine.
+definitions were fine. The fixes, once someone actually looked, were
+correct and fast. The gap was entirely in what I chose to verify — and
+then in the four days after that where nobody verified anything at
+all, because I'd already decided the story was over and never asked my
+agent to check again either. My agent wrote clean Kubernetes manifests
+and clean Java, and executed every real fix in this post correctly. It
+did not, and structurally cannot, decide on its own that nobody had
+read the pager for four days. That part is still, entirely, mine: not
+the code, not the infrastructure, not even most of the debugging — the
+decision to stop looking, and the four days of not looking again.
 
 ## So — was it worth it?
 
 The direct cost of this incident was real and not small: most of a
-working session spent chasing three unrelated root causes, then two more
-that came out of fixing them, then three more days on a single alert that
-refused to clear for reasons that turned out to be a metrics-library
-quirk, then a chronic hardware constraint, then two genuine application
-bugs underneath that. None of it was glamorous.
+working session's worth of real agent time chasing three unrelated root
+causes, then two more that came out of fixing them, then three more days
+on a single alert that refused to clear for reasons that turned out to
+be a metrics-library quirk, then a chronic hardware constraint, then two
+genuine application bugs underneath that — all of it reviewed and
+approved by me before it merged. None of it was glamorous.
 
 But it's also the most complete, most honest incident this project has
 produced — real timestamps, real error strings, real wrong turns left in
