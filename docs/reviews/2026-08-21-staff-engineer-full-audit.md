@@ -55,10 +55,17 @@ the same live-verification rigor the project applies to bugs. That deserves
 to be said plainly before the criticism starts: **the operate-gap the last
 review called "structural" has visibly narrowed.**
 
-The counterweight, equally real: the two highest-leverage items remain
-owner-gated and unmoved — **#128** (sre-agent v1 real run, needs an API
-key) and **#129** (publish anything). Zero articles are published after
-five reviews and ~28 days; three drafts exist (§7).
+The counterweight, equally real, but partially resolved during this very
+review's own PR cycle: **#128** (sre-agent v1 real run, needs an API
+key) remains owner-gated and unmoved. **#129 (publish anything) moved
+for real, after this review's first draft was written**: two articles
+published (<https://lmpeixoto.com/posts/ai-reviewer-and-the-org-chart/>,
+<https://lmpeixoto.com/posts/building-adamastorx/>), closing the
+zero-published-words gap four prior reviews named. Two more real,
+ready drafts remain unpublished (§7). This correction is left visible
+rather than silently smoothed into the original draft — the review was
+right when written and the owner acted before it merged, which is
+itself worth recording plainly.
 
 ## 2. Verdict
 
@@ -390,22 +397,34 @@ the ADR 0031 gate held, and this session's work was a coherent discipline
 batch (§1), not scattered new surface. That is real focus, and better than
 the 2026-08-11 review's "least differentiated week" worry.
 
-The dissipation is at the last mile, and it's the same shape four reviews
-have named: **the two highest-leverage items are owner-gated and stalled
-while zero-risk activity fills the time.** Concrete evidence:
+The dissipation was at the last mile, and it was the same shape four
+reviews had named — **updated mid-review**: while this report was open
+as a PR, the owner published two real articles
+(<https://lmpeixoto.com/posts/ai-reviewer-and-the-org-chart/>,
+<https://lmpeixoto.com/posts/building-adamastorx/>), closing the
+"owner-gated and stalled" framing for #129 specifically. Concrete state
+as of merge:
 
-- **Publishing:** three article drafts exist (`mimir-three-bugs` committed;
-  `the-alerts-worked-i-didnt-for-33-hours` and `the-org-chart-i-wrote-and-didnt-follow`
-  both **untracked** — not even committed), **zero published**. The 33-hour
-  incident draft is, by the 2026-08-11 review's own reckoning and mine, among
-  the best material the project will ever have, sitting uncommitted on disk.
+- **Publishing:** two real articles published (backlog #119/#129,
+  2026-08-21). Two more complete, ready drafts remain unpublished:
+  `mimir-three-bugs-and-a-fourth` (committed) and
+  `the-alerts-worked-i-didnt-for-33-hours` (now committed, backlog
+  #119/#129's own correction PR). The 33-hour incident draft is, by the
+  2026-08-11 review's own reckoning and mine, among the best material
+  the project will ever have — still unpublished, now the most
+  valuable next target rather than evidence of a stalled queue.
 - **The sre-agent (#128)** — the single most novel item in the backlog, v1
   built and tested, has never had a real run (needs an owner API key).
 
-So the honest framing: effort is well-concentrated on the engineering and
-the operating discipline, and poorly concentrated on converting either into
-the reputation that is objective 4. That conversion is owner work, not
-engineering work — which is exactly why more engineering won't fix it.
+So the honest framing, updated from this review's own original draft:
+effort is well-concentrated on the engineering and the operating
+discipline, and the conversion into the reputation that is objective 4
+— genuinely stalled when this review was first written — moved for
+real while it was open for review. That conversion is owner work, not
+engineering work, and the two published articles are the proof it
+responds to being done rather than re-recommended. The sre-agent
+(#128) is the one remaining fully-stalled high-leverage item of this
+same shape.
 
 ## 8. Workflow and process: is the loop actually working?
 
@@ -508,9 +527,13 @@ final response, not this file).
 
 **Weaknesses (real):**
 
-1. **Zero published output after five reviews** — the reputation objective is
-   entirely bottlenecked on an owner action nobody has taken, and the best
-   drafts are uncommitted.
+1. **The sre-agent (#128) remains the one high-leverage item still fully
+   owner-gated** (needs a real API key) — updated from this review's own
+   original draft: the publishing half of this weakness resolved while
+   this PR was open (two real articles published, backlog #119/#129).
+   Two more complete, ready drafts (`mimir-three-bugs`,
+   `the-alerts-worked-i-didnt-for-33-hours`) remain unpublished — real,
+   but no longer evidence of a stalled queue.
 2. **Security posture is the blind spot** — no `securityContext` anywhere,
    PLAINTEXT in-cluster traffic (mesh deferred), an unrestricted-ingress
    remnant until #126 finishes. For an SRE portfolio, this is the most
@@ -590,9 +613,11 @@ Ordered by value-per-effort. Items 1–6 are low-risk and mostly zero new CPU.
    line, highest signal-to-noise cost in the whole alert set.
 2. **Add `securityContext` to the 12 app workloads (§3.1, §6).** The most
    concrete unaddressed risk; a mechanical, high-value hardening pass.
-3. **Publish something (#129).** Two of the three drafts aren't even committed.
-   This is the single highest-leverage action for objective 4 and it is owner
-   work, not engineering. Commit the two untracked drafts today regardless.
+3. **Done while this PR was open.** Two real articles published
+   (backlog #119/#129, 2026-08-21) — the single highest-leverage action
+   for objective 4, and it happened. Next: publish the two remaining
+   ready drafts (`mimir-three-bugs`, `the-alerts-worked-i-didnt-for-33-hours`,
+   both now committed) — same owner action, not engineering, repeated.
 4. **Decide Mimir with a real trigger (§5)** — decommission per ADR 0038's
    rollback path, or re-tie #135 to a calendar date. Either buys back ~734Mi
    and removes the OOM noise class.
@@ -646,9 +671,13 @@ during this review. Cross-checks and honest limits:
    from the implicit "keep the constraint for narrative" lean on hardware
    (§11): the narrative dividend is banked and the migration is the better
    next chapter.
-7. **My own biggest uncertainty:** whether the owner reads the publishing and
-   sre-agent items as genuinely gated on their own time or as deprioritized —
-   five reviews have recommended both and neither has moved, which at some
-   point is data about priorities rather than a backlog gap. This review
-   states it as the finding it is (§7) rather than recommending them a sixth
-   time as if the recommendation were the missing piece.
+7. **My own biggest uncertainty, partially answered in real time.** This
+   review's original draft asked whether the owner read the publishing and
+   sre-agent items as genuinely gated on their own time or as
+   deprioritized, after five reviews had recommended both with neither
+   moving. The answer for publishing arrived before this PR merged: two
+   articles went out within hours of this report's first draft landing —
+   real evidence it was a real time-gating, not a deprioritization, and
+   that stating the finding plainly (rather than recommending it a sixth
+   time) was itself the useful act. The same question stays genuinely
+   open for the sre-agent (#128), which has not moved.
