@@ -28,6 +28,7 @@ state.
 | **M14 Reach and Packaging** | The project becomes publicly presentable: the top-level narrative doc a first-time reader can land on (#31), public read-only access to the live system, and an article-asset habit. No new runtime components (ADR 0031). |
 | **M15 Consolidation: Operate What You Built** | Close the gaps the expansion phase opened — every shipped service gets its dashboards/SLOs/alerts including the pipeline freshness SLO, Kafka durability is re-decided against the system that exists now, long-term retention enables SLO reporting over time, and dependency/backup/secrets hygiene is automated. No new application services (ADR 0031). |
 | **M16 Canary + SLO Operational Maturity** | Exercise and calibrate the canary-deployment and SLO machinery that already exists (#46, ADR 0020) — a recurring, dated drill cadence, real threshold calibration once #94's 30-day retention window closes, and an article evidence pack. Zero new components (ADR 0043). |
+| **M17 Close the Blind Spots: Harden and Self-Monitor** | Close the debt the project's own tooling can't see (2026-08-21 full audit, ADR 0044) — application-workload security hardening (`securityContext`), the observability stack's own-backend blind spots and the alert already crying wolf, and the record-keeping drift the doc-drift automation doesn't catch — plus the first Claude Code hooks/skills that turn trust-based safety rules and re-read procedures into enforced, loadable ones. Zero new always-on runtime components (the M16/ADR 0043 discipline, continued). |
 
 M6–M9 are the expansion phase (ADR 0022). The goal changed — breadth and
 novelty, on top of the tight core ADR 0021 produced — and ADR 0022 states
@@ -131,3 +132,44 @@ window, which does not close until ~2026-09-06 regardless of when M16
 opens — a calendar floor, not a milestone-ordering one. M16 deliberately
 adds no new component and does not gate M11 (`sre-agent`), which stays
 sequenced after M15 per ADR 0031 for its own, unrelated reason.
+
+**M17 (ADR 0044) follows M16 and is the roadmap response to the 2026-08-21
+full independent audit** (`docs/reviews/2026-08-21-staff-engineer-full-audit.md`).
+The audit's verdict was that the system is healthy and the operate-gap has
+narrowed, but the remaining debt is concentrated in three places the
+project's own tooling can't see — security posture (no `securityContext` on
+any hand-written app workload), the observability stack's own-backend blind
+spots (zero self-metrics from Mimir/Loki/Tempo/Pyroscope, and the new #125
+alert crying wolf on two stale-positive criticals), and record-keeping drift
+(five stale ADR headers, ~30 unmarked backlog items, and #97 not validating
+either surface) — plus a genuinely underused Claude Code toolchain (zero
+hooks/skills today). Each was re-verified live during ADR 0044's authoring.
+M17 closes those and makes the first tooling investment (a `PreToolUse`
+GitOps-mutation safety hook, a `SessionStart` KUBECONFIG hook, and two
+Skills), carrying M16's **zero new always-on component** discipline forward
+by name. It is not gated on M16 closing; its front-of-queue quick wins (the
+one-line stale-OOM alert gate, `securityContext`, #29's long-open clinvar
+dashboard, the record reconciliation, the safety hook) start immediately.
+Two M17-adjacent items carry a real owner-decision component, not pure
+engineering, and are flagged so they don't stall silently: re-tying #135's
+Mimir decommission trigger to a calendar date (its stated keep-reason has
+inverted — see ADR 0044 §4), and the hardware go/no-go below.
+
+**The hardware migration is deliberately scoped as the start of M7's own
+substrate arc, not folded into M17.** The audit's §11 recommendation to
+migrate the live platform off the T460s is accepted on its reasoning (the
+constraint's narrative dividend is already banked in ADR 0040/0041; its
+operational cost — 111% memory overcommit, chronic Mimir OOM, #69
+permanently blocked — is growing; and the migration itself is the next
+chapter of the owned-hardware story). M7's long-standing "rebuild on the
+dedicated host" goal is exactly what this is, so the migration lands as M7's
+arc rather than a new milestone number — planned as a restore drill following
+the `flannel-restore.md`/#123 precedent: a go/no-go decision + plan (the
+successor to #104's now-open-in-practice question), a pre-migration restore
+drill on the new host, the cutover, and a post-migration acceptance pass, each
+gated on the one before. A hard precondition runs through all of them:
+**preserve #94's 30-day Prometheus history across the move** — migrate after
+its window closes (~2026-09-06) or carry the PVC across with the #49 PVC-copy
+discipline; a naive host move that resets that clock destroys the single most
+differentiated unpublished asset the project has. Once done, the migration
+is what finally clears M7's hardware gate for #51/#52/#69 and the Istio mesh.
