@@ -43,6 +43,28 @@ jobs:
             exit 1
           fi
 
+      - name: Self-test -- checker must fail when an item is referenced as done but carries no marker itself (#21a shape, backlog #147)
+        run: |
+          if python3 scripts/check_backlog_structure.py scripts/fixtures/broken-status-marker-crossref.md; then
+            echo "::error::checker did not fail on a cross-referenced-but-unmarked fixture"
+            exit 1
+          fi
+
+      - name: Self-test -- checker must pass a correctly-marked cross-reference, and must not mistake a precondition phrase for a status marker (the #154 shape)
+        run: python3 scripts/check_backlog_structure.py scripts/fixtures/status-marker-crossref-ok.md
+
+      - name: Self-test -- checker must fail when a --gone component's removal item carries no marker itself (S1/S2 shape, backlog #147)
+        run: |
+          if python3 scripts/check_backlog_structure.py scripts/fixtures/broken-status-marker-gone.md --gone gateway --gone whoami; then
+            echo "::error::checker did not fail on a confirmed-gone-but-unmarked fixture"
+            exit 1
+          fi
+
+      - name: Self-test -- checker must pass the same gone-component fixture once marked, and must not flag it at all without --gone
+        run: |
+          python3 scripts/check_backlog_structure.py scripts/fixtures/status-marker-gone-ok.md --gone gateway --gone whoami
+          python3 scripts/check_backlog_structure.py scripts/fixtures/broken-status-marker-gone.md
+
       - name: Check the real backlog.md
         run: python3 scripts/check_backlog_structure.py docs/roadmap/backlog.md
 
@@ -97,10 +119,31 @@ jobs:
 
           bash adamastorx/scripts/check-roster-drift.sh "$fixture_repo" "$fx/overview.md" "$fx/grafana-with-reason.yaml" "$fx/adr-with-reason.md" 0
 
+      - name: Self-test -- checker must fail when a confirmed-gone component's removal item has no marker, pass once marked (S1/S2 shape, backlog #147)
+        run: |
+          fixture_repo=$(mktemp -d)
+          mkdir -p "$fixture_repo/argocd/apps"
+          cp adamastorx/scripts/fixtures/roster-drift-grace/grace-fixture-service.yaml \
+            "$fixture_repo/argocd/apps/grace-fixture-service.yaml"
+          git -C "$fixture_repo" init -q
+          git -C "$fixture_repo" config user.email "ci@adamastorx"
+          git -C "$fixture_repo" config user.name "ci"
+          git -C "$fixture_repo" add -A
+          git -C "$fixture_repo" commit -q -m "add grace-fixture-service"
+
+          fx=adamastorx/scripts/fixtures
+          if bash adamastorx/scripts/check-roster-drift.sh "$fixture_repo" "$fx/roster-drift-grace/overview.md" "" "" 0 "$fx/broken-status-marker-gone.md"; then
+            echo "::error::checker did not fail when gateway/whoami (confirmed absent from this fixture's roster) had no closing marker on their own removal items"
+            exit 1
+          fi
+
+          bash adamastorx/scripts/check-roster-drift.sh "$fixture_repo" "$fx/roster-drift-grace/overview.md" "" "" 0 "$fx/status-marker-gone-ok.md"
+
       - name: Check the real overview.md, dashboards, and SLO table
         run: |
           bash adamastorx/scripts/check-roster-drift.sh platform adamastorx/docs/architecture/overview.md \
-            platform/argocd/apps/grafana.yaml adamastorx/docs/adr/0020-slos-and-alerting.md
+            platform/argocd/apps/grafana.yaml adamastorx/docs/adr/0020-slos-and-alerting.md 14 \
+            adamastorx/docs/roadmap/backlog.md
 
   ci:
     needs: [backlog-structure, roster-drift]
