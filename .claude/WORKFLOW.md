@@ -105,6 +105,34 @@ means the cluster's steady state is defined in `platform` — a manual
 `kubectl` change is either a debugging step that gets thrown away, or it
 needs to become a PR, never a silent standing edit.
 
+## Session hooks (`platform/.claude/settings.json`)
+
+Two `platform`-repo hooks share `.claude/settings.json` but do unrelated
+jobs — worth keeping distinct, since both fire on every session and it's
+easy to conflate "a hook ran" with "the mutation rule was enforced":
+
+- **Backlog #149 — enforcement.** A `PreToolUse` hook
+  (`.claude/hooks/gitops-mutation-guard.py`, matcher: `Bash`) mechanically
+  blocks mutating `kubectl`/`terraform` commands unless the
+  `ADAMASTORX_CONFIRM_MUTATION=1` marker is attached to that exact
+  command. This is the Safety rule above, enforced rather than trusted.
+- **Backlog #150 — convenience, not enforcement.** A `SessionStart` hook
+  (`.claude/hooks/session-start-brief.py`) makes no allow/deny decision
+  and blocks nothing. It surfaces two things a session would otherwise
+  have to go rediscover: it prints a short, hand-maintained excerpt of
+  this file's `SESSION_STATE.md` gremlin log
+  (`.claude/hooks/known-gremlins.md`) into the new session's context, and
+  it documents (in its own docstring) that KUBECONFIG is exported for the
+  session — but via `.claude/settings.json`'s top-level `env` block, not
+  via anything the hook itself does. A `SessionStart` hook's own
+  stdout/exports die with its subprocess; they can't reach the Bash tool's
+  later invocations. The `env` block is the actual, working mechanism for
+  "every session's shell sees KUBECONFIG without a manual export" — this
+  was independently verified live, not assumed, before writing it up here.
+
+Neither hook touches the other's domain: #149 never surfaces information,
+#150 never blocks a command.
+
 ## `SESSION_STATE.md`
 
 `docs/SESSION_STATE.md` is a scratch log of *current* state — in-flight
