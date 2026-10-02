@@ -22,6 +22,8 @@ into one — don't force ceremony where it adds no value.
 - [ ] Change is scoped to one concern (one epic, one repo where possible).
 - [ ] Docs updated if behaviour, architecture, or operational procedure changed.
 - [ ] New tool/dependency? Write an ADR first (`docs/adr/`).
+- [ ] **Bounded loop produced the diff?** PR body states: check used, RED
+  observed, iteration count, and that human review re-ran the check.
 - [ ] **New service?** Its AC names a golden-signal dashboard, an ADR 0020
   SLO-table row, and any consumer-lag/staleness alert with a runbook — or
   states explicitly why one doesn't apply (backlog #109; M13 shipped
