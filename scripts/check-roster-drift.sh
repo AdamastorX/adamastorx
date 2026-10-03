@@ -34,12 +34,27 @@ set -euo pipefail
 # section; grafana.yaml's own top-of-file comment) -- a stated reason
 # is found by the exact same grep as a real entry, no separate
 # exemption list to maintain or let drift.
+#
+# backlog #147: a third, optional check -- the S1/S2 shape. A backlog
+# item whose whole heading is "Remove the `name` ..." (S1/S2's own
+# structural convention for "this item's entire purpose is deleting a
+# named component") is cross-checked against the *same* roster this
+# script already derives above: if `name` is not a live Application
+# (i.e. genuinely, confirmedly gone -- not a maintained list of
+# "removed" names, which would be the same kind of drift-prone list
+# the roster check itself exists to avoid), that item is expected to
+# carry its own closing marker. The actual marker-vs-block logic lives
+# in check_backlog_structure.py (--gone), which already owns the #21a
+# half of this same AC and the block-parsing to go with it -- this
+# script's job is only what it already does best: knowing what's
+# really still live.
 
-PLATFORM_DIR="${1:?usage: check-roster-drift.sh <platform-repo-path> <overview.md-path> [<grafana.yaml-path> <adr-0020-path> <grace-days>]}"
-OVERVIEW_MD="${2:?usage: check-roster-drift.sh <platform-repo-path> <overview.md-path> [<grafana.yaml-path> <adr-0020-path> <grace-days>]}"
+PLATFORM_DIR="${1:?usage: check-roster-drift.sh <platform-repo-path> <overview.md-path> [<grafana.yaml-path> <adr-0020-path> <grace-days> <backlog.md-path>]}"
+OVERVIEW_MD="${2:?usage: check-roster-drift.sh <platform-repo-path> <overview.md-path> [<grafana.yaml-path> <adr-0020-path> <grace-days> <backlog.md-path>]}"
 GRAFANA_YAML="${3:-}"
 ADR_0020="${4:-}"
 GRACE_DAYS="${5:-14}"
+BACKLOG_MD="${6:-}"
 
 if ! command -v yq >/dev/null 2>&1; then
   echo "yq is required (https://github.com/mikefarah/yq)" >&2
@@ -56,6 +71,11 @@ if [ "${#files[@]}" -eq 0 ]; then
   exit 0
 fi
 
+# Every live component's name, collected as the loop below derives it
+# anyway -- reused by the backlog #147 S1/S2 check at the very end
+# instead of re-deriving the roster a second time.
+roster_names=()
+
 for f in "${files[@]}"; do
   src_path=$(yq eval '.spec.source.path // ""' "$f")
   [ -z "$src_path" ] && continue
@@ -64,6 +84,7 @@ for f in "${files[@]}"; do
   case "$name" in
     *-ingress | *-issuers | *-backup) continue ;;
   esac
+  roster_names+=("$name")
 
   if ! grep -qF -- "$name" "$OVERVIEW_MD"; then
     echo "::error file=${OVERVIEW_MD}::live component '${name}' (${f}) is not mentioned anywhere in overview.md" >&2
@@ -97,8 +118,38 @@ for f in "${files[@]}"; do
   fi
 done
 
+# backlog #147, S1/S2 shape: any backlog item structurally shaped like
+# "Remove the `name` ..." whose named component is not (or no longer)
+# part of the live roster computed above is expected to carry its own
+# closing marker. Extraction is structural (a specific heading shape),
+# not a maintained list of names -- whatever backlog.md itself names
+# as a removal target is what gets checked.
+if [ -n "$BACKLOG_MD" ]; then
+  gone_flags=()
+  candidates=$(grep -oP '^\*\*[A-Za-z0-9]+\. Remove (the )?`\K[\w.-]+(?=`)' "$BACKLOG_MD" | sort -u || true)
+  for name in $candidates; do
+    live=0
+    for roster_name in "${roster_names[@]:-}"; do
+      if [ "$roster_name" = "$name" ]; then
+        live=1
+        break
+      fi
+    done
+    if [ "$live" -eq 0 ]; then
+      gone_flags+=(--gone "$name")
+    fi
+  done
+
+  if [ "${#gone_flags[@]}" -gt 0 ]; then
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if ! python3 "$script_dir/check_backlog_structure.py" "$BACKLOG_MD" "${gone_flags[@]}"; then
+      fail=1
+    fi
+  fi
+fi
+
 if [ "$fail" -ne 0 ]; then
-  echo "One or more live components are missing from overview.md, or (past the grace period) from the dashboard/SLO surface with no stated reason (backlog #97a/#109)." >&2
+  echo "One or more live components are missing from overview.md, (past the grace period) from the dashboard/SLO surface with no stated reason (backlog #97a/#109), or a confirmed-gone removal item is missing its own closing marker (backlog #147)." >&2
   exit 1
 fi
 
