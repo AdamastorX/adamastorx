@@ -130,7 +130,7 @@ every `Bash` tool call before it runs.
   the hook doesn't recognize, terraform `plan`/`validate`/`show`/`output`,
   and anything invoked with `--dry-run` — read-only inspection is never
   blocked, token or not.
-- **Confirmation token**: a blocked command is permitted only if the
+- **Confirmation token**: a blocked command gets past the hook only if the
   literal marker `ADAMASTORX_CONFIRM_MUTATION=1` appears in the exact
   command string being run, e.g.:
 
@@ -139,6 +139,8 @@ every `Bash` tool call before it runs.
   ADAMASTORX_CONFIRM_MUTATION=1 terraform apply
   ```
 
+  With the marker the hook only stops blocking: it does **not** approve
+  the command, so Claude Code's normal permission prompt still decides.
   The marker is per-command, not a session-wide switch — it has to be
   attached to the specific action being confirmed, matching this section's
   "confirmation for that specific action" wording. To ask Claude to run a
@@ -175,7 +177,7 @@ every `Bash` tool call before it runs.
 - Verified with a real test, not just a config diff:
   `platform/.claude/hooks/test_gitops_mutation_guard.sh` feeds the hook
   synthetic `PreToolUse` JSON on stdin and asserts a mutating command is
-  blocked without the token, allowed with it, and that read-only commands
+  blocked without the token, not blocked with it, and that read-only commands
   are never blocked either way.
 
 A bounded verification loop runs with no `KUBECONFIG` in its environment
@@ -201,13 +203,12 @@ easy to conflate "a hook ran" with "the mutation rule was enforced":
   have to go rediscover: it prints a short, hand-maintained excerpt of
   this file's `SESSION_STATE.md` gremlin log
   (`.claude/hooks/known-gremlins.md`) into the new session's context, and
-  it documents (in its own docstring) that KUBECONFIG is exported for the
-  session — but via `.claude/settings.json`'s top-level `env` block, not
-  via anything the hook itself does. A `SessionStart` hook's own
-  stdout/exports die with its subprocess; they can't reach the Bash tool's
-  later invocations. The `env` block is the actual, working mechanism for
-  "every session's shell sees KUBECONFIG without a manual export" — this
-  was independently verified live, not assumed, before writing it up here.
+  it reminds the session that KUBECONFIG is **not** set by this repo —
+  the path is per machine (the original Linux host's path does not exist
+  on the operator's Mac, and an `env` entry would override the operator's
+  own export with a missing file), so each session exports its own. A
+  `SessionStart` hook can't export it anyway: its stdout and exports die
+  with its subprocess and never reach the Bash tool's later invocations.
 
 Neither hook touches the other's domain: #149 never surfaces information,
 #150 never blocks a command.
