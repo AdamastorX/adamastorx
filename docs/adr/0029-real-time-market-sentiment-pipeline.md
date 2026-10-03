@@ -1,6 +1,6 @@
 # 0029. Real-time market sentiment pipeline: domain choice, external data sources, lexicon-first sentiment, M7 gating
 
-Status: Proposed
+Status: Accepted
 
 ## Context
 

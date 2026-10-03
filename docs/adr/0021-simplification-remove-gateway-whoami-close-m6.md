@@ -1,6 +1,6 @@
 # 0021. Simplification pass: remove `gateway` and `whoami`, ClinVar-only annotation, close M6
 
-Status: Proposed
+Status: Accepted
 
 ## Context
 
