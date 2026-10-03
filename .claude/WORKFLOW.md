@@ -8,20 +8,31 @@ Understand → Design → Validate → Implement → Test → Document → Revie
 
 - **Understand** — read the issue, the linked epic, and any relevant ADR.
   Ask if acceptance criteria are ambiguous, don't guess.
-- **Design** — decide the approach. For anything touching architecture or
-  introducing a new tool, write the ADR here, before implementing. Design
-  decisions with rejected alternatives worth remembering (per
-  `docs/adr/README.md`) go through the `architect` agent — the session
+- **Design** — decide the approach. Optionally, use `grilling` (via
+  `mattpocock-skills`) to map open questions as a decision tree before
+  writing acceptance criteria to falsifiable precision. For anything touching
+  architecture or introducing a new tool, write the ADR here, before
+  implementing. Design decisions with rejected alternatives worth remembering
+  (per `docs/adr/README.md`) go through the `architect` agent — the session
   driving the issue does not make those calls inline, even when it has an
-  opinion. "It's in the approved stack" exempts the tool choice, not the
-  pattern/topology/strategy decisions made while using it.
+  opinion. **Grilling feeds the `architect` agent and cannot replace it** — a
+  grilling session that reaches "shared understanding" and skips the ADR is a
+  failure mode to guard against. "It's in the approved stack" exempts the
+  tool choice, not the pattern/topology/strategy decisions made while using
+  it.
 - **Validate** — sanity-check the design against constraints that matter:
   does it fit the approved stack, does it respect repo boundaries, is there
   a simpler way.
 - **Implement** — write the change on a branch, one concern. Never commit
-  directly to `main` — see Branching & PRs below.
+  directly to `main` — see Branching & PRs below. A bounded verification loop
+  (see `docs/runbooks/verified-agentic-loop.md`) is an allowed technique for
+  a single falsifiable check on this vertical slice only, subject to eight
+  preconditions.
 - **Test** — prove it works. Automated where possible; for infra, that means
-  actually applying/destroying, not just `plan`.
+  actually applying/destroying, not just `plan`. Render-time checks (`terraform
+  validate`, `kubeconform`, Prometheus rule validation) are loopable stop
+  conditions when they have themselves been observed to fail; run-time checks
+  are never loopable.
 - **Document** — architecture doc, ADR, or runbook, whichever applies. Never
   skipped — an undocumented change isn't done.
 - **Review** — open a PR and stop. Merge only after the human owner reviews
@@ -166,6 +177,12 @@ every `Bash` tool call before it runs.
   synthetic `PreToolUse` JSON on stdin and asserts a mutating command is
   blocked without the token, allowed with it, and that read-only commands
   are never blocked either way.
+
+A bounded verification loop runs with no `KUBECONFIG` in its environment
+— a credential-based gate stronger than command deny-lists. No loop may
+have live-verification (cluster mutation/inspection) as a stop condition,
+and `--max-iterations` is mandatory (≤15). All eight preconditions in
+`docs/runbooks/verified-agentic-loop.md` must hold before starting.
 
 ## `SESSION_STATE.md`
 

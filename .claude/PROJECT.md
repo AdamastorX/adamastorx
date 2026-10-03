@@ -59,6 +59,33 @@ is deployed and live (#49/#50, see "Current milestone" below); the
 Istio ambient mesh is not (still blocked-on-hardware) — the exclusion
 itself no longer applies to either.
 
+## Operator toolchain (Claude Code)
+
+Claude Code plugins extend the Claude Code workflow but are not runtime
+platform components. They are governed separately from the approved stack.
+
+**Enablement rules:**
+
+1. **Project scope only**, via committed `.claude/settings.json` in each
+   repo. Never user scope — invisible to review, drifts per machine, and a
+   project whose thesis is that configuration lives in Git should not keep
+   its operator toolchain outside it.
+2. **Enabled only where a real loop target exists**: `adamastorx` and
+   `services`. Not `platform` or `observability` — blast radius differs, and
+   symmetry is not a reason.
+3. **Versions recorded, refreshes reviewed.** Marketplace refreshes can
+   change an executing shell script with no PR and no CI; treat version
+   upgrades as reviewable changes on the footing of Renovate minors.
+4. **Sanctioned-skill allowlist.** Sanctioned: `grilling` (and `grill-me`),
+   `tdd` as reference vocabulary only. Forbidden classes: any skill that
+   writes `.claude/settings.json` or installs hooks (`git-guardrails-claude-code`),
+   any skill that merges PRs, `loop-me`.
+5. **`.claude/ralph-loop.local.md` is gitignored** — loop state is per-session,
+   not a committed file.
+
+See ADR 0046 for the bounded verification loop discipline and its eight
+preconditions.
+
 ## Current milestone
 
 M0-M5 are complete/verified live. **M4 Reliability** itself is not fully
