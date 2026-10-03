@@ -1,6 +1,6 @@
 # 0023. Adopt Cilium (eBPF CNI) + Hubble, overturning its place on the excluded-tools list
 
-Status: Proposed
+Status: Accepted
 
 ## Context
 

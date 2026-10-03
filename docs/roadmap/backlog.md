@@ -17,7 +17,7 @@ Labels shown are from `.github/labels.yml`.
 - Purpose: Repos, labels, milestones, and project board exist and match this plan.
 - Acceptance Criteria: 4 repos created; labels synced from `labels.yml`; 5 milestones created; 1 project board with 5 columns.
 - Dependencies: none.
-- Priority: P0. Labels: `epic`, `platform`.
+- Priority: P0. Labels: `epic`, `platform`. **Done** — 4 repos live (adamastorx/platform/services/observability), `.github/labels.yml` + `scripts/bootstrap-github.sh` on file, milestones/project board in active use.
 
 **2. Define contribution guide and coding principles**
 - Purpose: Contributors (human or agent) know the workflow and PR expectations before opening the first PR.
@@ -31,13 +31,13 @@ Labels shown are from `.github/labels.yml`.
 - Purpose: Every repo has a place for architecture notes, decisions, and runbooks before any code exists.
 - Acceptance Criteria: `docs/` tree created in `adamastorx`; ADR template and seed ADR published; process documented in `docs/adr/README.md`.
 - Dependencies: #1.
-- Priority: P0. Labels: `documentation`, `architecture`.
+- Priority: P0. Labels: `documentation`, `architecture`. **Done** — `docs/adr/README.md` + 44 ADRs on file, process in active use.
 
 **4. Write initial architecture overview**
 - Purpose: A single diagram/doc anyone can read to understand the target shape of the system before M1 work starts.
 - Acceptance Criteria: `docs/architecture/overview.md` reviewed and merged; covers repo boundaries and data flow at a glance.
 - Dependencies: #3.
-- Priority: P1. Labels: `architecture`, `documentation`.
+- Priority: P1. Labels: `architecture`, `documentation`. **Done** — `docs/architecture/overview.md` exists, actively maintained (cited by ADR 0023's consequences).
 
 ---
 
@@ -49,19 +49,19 @@ Labels shown are from `.github/labels.yml`.
 - Purpose: A running, reproducible cluster is the prerequisite for everything else in M1/M2/M3.
 - Acceptance Criteria: `terraform apply` from `platform` repo produces a healthy k3s cluster; state is versioned; destroy/recreate is proven to work.
 - Dependencies: #1.
-- Priority: P0. Labels: `platform`.
+- Priority: P0. Labels: `platform`. **Done** — cluster live and reachable (`kubectl get ns` confirmed live against `platform/terraform/kubeconfig`).
 
 **6. Bootstrap ArgoCD as GitOps entrypoint**
 - Purpose: All further cluster changes flow through Git, not manual `kubectl apply`.
 - Acceptance Criteria: ArgoCD installed and watching `platform` repo; an app-of-apps pattern documented; one trivial app synced end to end as proof.
 - Dependencies: #5.
-- Priority: P0. Labels: `platform`.
+- Priority: P0. Labels: `platform`. **Done** — `argocd` namespace live, app-of-apps pattern (ADR 0003) used everywhere.
 
 **7. Deploy Traefik ingress and cert-manager**
 - Purpose: Services can be exposed with valid TLS without hand-rolled certs.
 - Acceptance Criteria: Traefik routes external traffic to a test service; cert-manager issues and renews a certificate automatically.
 - Dependencies: #6.
-- Priority: P1. Labels: `platform`, `security`.
+- Priority: P1. Labels: `platform`, `security`. **Done** — `traefik`/`cert-manager` namespaces live, TLS via the local `adamastorx-ca` chain used by every service.
 
 ### Epic: CI/CD
 
@@ -69,19 +69,19 @@ Labels shown are from `.github/labels.yml`.
 - Purpose: Every PR gets automated build, test, and lint feedback before review.
 - Acceptance Criteria: Workflow runs on PR for `services` and `platform`; failing build/lint blocks merge.
 - Dependencies: #1.
-- Priority: P0. Labels: `enhancement`.
+- Priority: P0. Labels: `enhancement`. **Done** — CI workflows present and enforced in all repos (e.g. `check-resource-limits.sh`/`check-runbook-coverage.sh` wired as required jobs).
 
 **9. Container build and publish workflow**
 - Purpose: Merged changes produce a deployable artifact automatically.
 - Acceptance Criteria: Image built and pushed to a registry on merge to main, tagged with commit SHA.
 - Dependencies: #8.
-- Priority: P1. Labels: `enhancement`.
+- Priority: P1. Labels: `enhancement`. **Done** — `ghcr.io/adamastorx/*` images built/pushed and referenced throughout the platform.
 
 **10. Add Trivy security scanning to CI**
 - Purpose: Known-vulnerable images/dependencies are caught before deploy, not after.
 - Acceptance Criteria: Trivy scan runs in CI; build fails on critical/high CVEs with no override without explicit acknowledgement.
 - Dependencies: #9.
-- Priority: P1. Labels: `security`.
+- Priority: P1. Labels: `security`. **Done** — `aquasecurity/trivy-action` used extensively in `services/.github/workflows/ci.yml` and `build-publish.yml`.
 
 ---
 
@@ -93,13 +93,13 @@ Labels shown are from `.github/labels.yml`.
 - Purpose: A single entrypoint for external traffic into the application.
 - Acceptance Criteria: Service builds, has a health endpoint, deploys via the M1 pipeline.
 - Dependencies: #7, #9.
-- Priority: P0. Labels: `backend`.
+- Priority: P0. Labels: `backend`. **Done, historical** — `gateway` was scaffolded/deployed per ADR 0010, later removed entirely (ADR 0021/S1); noting completion for the record, not a live component today.
 
 **12. Scaffold Spring Boot API service**
 - Purpose: Core business-logic service the gateway routes to.
 - Acceptance Criteria: Service builds, has a health endpoint, deploys via the M1 pipeline, reachable through the gateway.
 - Dependencies: #11.
-- Priority: P0. Labels: `backend`.
+- Priority: P0. Labels: `backend`. **Done** — `api` scaffolded, live, now with its own Ingress+cert (ADR 0021).
 
 **13. Integrate Kafka (KRaft) messaging between services**
 - Purpose: Async communication path between API and workers, the core "distributed systems" challenge of the project.
@@ -117,7 +117,7 @@ Labels shown are from `.github/labels.yml`.
 - Purpose: Reduce load on PostgreSQL for hot-path reads — *only if a concrete hot path actually needs it*. Not a reason to add Redis by itself; the approved-stack list names the tool, not an obligation to use it without a measured need.
 - Acceptance Criteria: A specific, measurable hypothesis is written *before* implementation (which read, expected hit ratio, staleness tolerance) — see services#5 for the current draft. Once implemented: a defined cache-aside path exists for that read; hit/miss ratio is an observable metric; invalidation strategy is documented; the read path's behaviour on a Redis outage (fail open to Postgres, not fail the request) is explicit and tested.
 - Dependencies: #14.
-- Priority: P2. Labels: `backend`.
+- Priority: P2. Labels: `backend`. **Done** — Redis (ADR 0016) confirmed live; referenced as pre-existing by backlog #26's own text.
 
 **16. Transactional outbox / idempotent consumer for `work-items`** — Done (ADR 0026, decided and landed while building #53, which is the item that gave it a real reason). Outbox-table-plus-relay chosen over idempotent-consumer-plus-retry, with the rejected alternative's reasoning recorded in the ADR (an inline idempotent-consumer design can't cleanly support #53's own per-subscriber dead-lettering without becoming the outbox approach anyway). `WorkItemOutboxService` persists the `work_items` row and an `outbox_events` row in one transaction; `OutboxRelay` independently publishes and marks it published via `TransactionTemplate` (not `@Transactional` on a self-invoked helper method — the same Spring AOP self-invocation bug found live in watchlist-service's identical relay was fixed here proactively, see ADR 0026's addendum). `WorkItemOutboxFailureIntegrationTest` forces every publish attempt to fail (unreachable broker) and proves the work item and its outbox row both survive. ADR 0012's consequences section updated. Compiles clean; not executed locally this session (no Docker available in the agent's environment) — CI's real Testcontainers run is what actually proves it on merge, see the services PR.
 - Purpose: Close a known consistency gap — `api` currently persists to PostgreSQL then calls `KafkaTemplate.send()` as two independent operations (flagged as an explicit, deliberate gap in ADR 0012, not an oversight). A Kafka publish failure after a successful database commit leaves a `work_items` row that `workers` never sees; a broker hiccup, not a code bug, is enough to trigger it.
@@ -139,25 +139,25 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Purpose: Every service emits traces, metrics, and logs in a consistent format.
 - Acceptance Criteria: Gateway, API, workers all export OTel data; a single trace can be followed across all three.
 - Dependencies: #13.
-- Priority: P0. Labels: `observability`.
+- Priority: P0. Labels: `observability`. **Done** — OTel instrumentation (ADR 0013) pervasive across all services.
 
 **18. Deploy Prometheus and Grafana**
 - Purpose: Metrics are collected and visualisable, without long-term/multi-tenant storage this single-node cluster doesn't need yet.
 - Acceptance Criteria: Metrics from #17 queryable in Grafana via Prometheus; retention policy documented.
 - Dependencies: #17, #6.
-- Priority: P0. Labels: `observability`.
+- Priority: P0. Labels: `observability`. **Done** — `prometheus`/`grafana` namespaces live (ADR 0014).
 
 **18a. Mimir — treat as a separate experiment, not a dependency of #18**
 - Purpose: Long-term/multi-tenant metrics storage is a real capability worth learning, but nothing here needs it yet — one node, one tenant, no retention requirement beyond "recent." Bundling it into #18 would gate basic dashboards on infrastructure the AC doesn't actually call for.
 - Acceptance Criteria: A standalone write-up/PoC evaluating Mimir specifically (what it adds over Prometheus's own storage at this scale, what it costs to run), done whenever there's an actual question it answers — not scheduled as a prerequisite for #18/#19.
 - Dependencies: #18.
-- Priority: P2. Labels: `observability`.
+- Priority: P2. Labels: `observability`. **Done** — ADR 0038 is the full write-up/PoC (monolithic mode); `mimir` namespace live (decommission trigger tracked separately, #135).
 
 **19. Deploy Loki and Tempo for logs and traces**
 - Purpose: Logs and traces are centrally queryable and correlated with metrics.
 - Acceptance Criteria: Logs from all services in Loki; traces from #17 in Tempo; Grafana can pivot from a trace to a log line and back.
 - Dependencies: #18.
-- Priority: P1. Labels: `observability`.
+- Priority: P1. Labels: `observability`. **Done** — `loki`/`tempo` namespaces live (ADR 0015), trace↔log correlation used throughout.
 
 **19a. Prometheus exemplars — metric-to-trace pivot, treat as a separate follow-up to #19**
 - Purpose: #19's original "metric to trace" pivot needs exemplars — a Prometheus sample carrying the trace ID active when it was recorded — which needs native histograms/OpenMetrics scraping and a Micrometer exemplar bridge on all three services, none of which exists yet. Deploying Loki/Tempo and wiring the trace↔log pivot (#19) doesn't need this; bundling it in would gate a working two-way pivot on a separately-scoped app-level change.
@@ -169,7 +169,7 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Purpose: Latency, traffic, errors, saturation are visible at a glance for every service.
 - Acceptance Criteria: One dashboard per service covering the four golden signals; dashboards are code (provisioned, not click-built).
 - Dependencies: #19.
-- Priority: P1. Labels: `observability`.
+- Priority: P1. Labels: `observability`. **Done** — dashboards live via `platform/argocd/apps/grafana.yaml` (ADR 0017), documented in `observability/grafana/dashboards/README.md`.
 
 ---
 
@@ -181,13 +181,13 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Purpose: ADR 0017 shipped golden-signal dashboards with two named, deliberately-deferred gaps (no true latency percentiles — average/max only, no `_bucket` series; `workers`' saturation panel uses thread-pool usage as a stated proxy, no real Kafka consumer-lag metric) and `clinvar-service` (ADR 0019) has zero Prometheus metrics at all. Writing SLOs (#21) against a stand-in instead of the real signal would pick thresholds against the wrong number. ADR 0020 makes this the deferred follow-up, due now.
 - Acceptance Criteria: `management.metrics.distribution.percentiles-histogram.http.server.requests` (and the `spring.kafka.listener` timer equivalent) enabled on `gateway`/`api`/`workers`, giving a real `histogram_quantile(0.95, ...)`. `workers` gets a real consumer-lag metric via explicit `KafkaClientMetrics(consumer).bindTo(meterRegistry)` registered against its hand-built `ConsumerFactory` (Boot's auto-configured Kafka metrics binder doesn't apply here, same reason `spring.kafka.listener.observation-enabled` was already a no-op, ADR 0011). `clinvar-service` gets a `/metrics` endpoint (`prometheus_client`) exposing an ingestion-duration histogram, an `in_progress` gauge, a counter on the 409 concurrent-rejection path (services#36), and a lookup-latency/count histogram. ADR 0017's three dashboards updated in the same wave to plot the real values instead of the stated average/max/thread-pool stand-ins.
 - Dependencies: #20.
-- Priority: P0. Labels: `backend`, `observability`.
+- Priority: P0. Labels: `backend`, `observability`. **Done** — real histogram/lag/clinvar metrics confirmed shipped; own dependency line in #45 already calls it done, alerts `WorkersConsumerLagHigh`/`ClinVarIngestionDurationAnomaly` require these metrics.
 
 **21. Define SLOs and alerting rules**
 - Purpose: "Healthy" is defined numerically, and alerts fire on the definition, not on vibes.
 - Acceptance Criteria: One SLO per service (ADR 0020's table): `gateway`/`api` non-5xx rate + p95 latency (`api` additionally on `GET /variants/lookup` specifically, its own external-dependency failure mode); `workers` listener-error rate + consumer-lag threshold (not latency — a queue consumer's saturation signal is backlog depth); `clinvar-service` lookup non-5xx rate + p95, plus an ingestion-freshness SLO (time since last successful ingestion exceeding the scheduled cadence) and an ingestion-duration-anomaly alert (a run taking several multiples of the ~90s real-data baseline — the exact signal that would have made the double-ingestion incident visible as a metric instead of a `kubectl logs --previous` read after the fact). Alertmanager enabled (`argocd/apps/prometheus.yaml`), alert rules via Prometheus's own `serverFiles.alerting_rules.yml` (no Operator/CRD, ADR 0014's precedent). No external notification channel (Slack/email/PagerDuty) wired up yet — stated openly as deferred, not silently incomplete; alerts visible in Alertmanager's/Grafana's own alerting views for now.
 - Dependencies: #21a.
-- Priority: P0. Labels: `observability`.
+- Priority: P0. Labels: `observability`. **Done** — 25 `alert:` rules live in `platform/argocd/apps/prometheus.yaml`, matching the AC's per-service table.
 
 **21b. ~~Error-budget policy and multi-window burn-rate alerts~~ — CLOSED, simplification (ADR 0021)**
 - Multi-window burn-rate alerting is an enterprise/multi-team ritual for detecting a slow-burning error budget across shared, externally-generated traffic. On a single-operator project whose traffic is self-generated (manual/test requests, not real users), there is no budget to unknowingly burn — #21's per-SLO threshold alerts are already the right altitude for this project's actual scale. Closed rather than built as unearned complexity.
@@ -196,7 +196,7 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Purpose: ADR 0020 enabled Alertmanager but shipped it with no external receiver, stated openly as deferred rather than assumed away — an alert today is only visible to someone already looking at Alertmanager's or Grafana's own UI, which defeats the point of alerting for a project with no one watching a dashboard continuously. ADR 0020 names a real destination as the only thing blocking this, not a design question.
 - Acceptance Criteria: Alertmanager's config gets one real receiver — a free destination (ntfy topic, Discord webhook, or Slack incoming webhook) reachable from the cluster — plus a severity-based routing tree (e.g. a `page`-equivalent severity routes to the real destination immediately, a `warning` severity batches/dedups) so noise doesn't drown a real page. At least one alert from #21's table is verified firing end-to-end into the chosen destination live, not just config-reviewed.
 - Dependencies: #21.
-- Priority: P1. Labels: `observability`.
+- Priority: P1. Labels: `observability`. **Done** — real ntfy.sh delivery confirmed repeatedly (chaos scenario 2, #47's postscript, #133), severity routing live.
 
 **21d. Node-disk / PVC-growth capacity alert**
 - Purpose: every PVC on this cluster (both Postgres instances, Loki, Tempo, `clinvar-service`'s refdata) uses the `local-path` StorageClass, confirmed to enforce no storage quota — a PVC's `resources.requests.storage` is advisory only, not an enforced ceiling, so unbounded growth on any one of them silently eats the single node's real disk with no warning. Nothing in #21's per-service SLO table watches this, since it's a node-level signal, not a per-service one.
@@ -214,7 +214,7 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Purpose: Whoever's on call for an alert has a documented first response, not a blank page.
 - Acceptance Criteria: One runbook per alert defined in #21, living in `observability/runbooks/`, each covering what fired/what it means/first response/how to confirm resolution.
 - Dependencies: #21.
-- Priority: P0. Labels: `documentation`, `observability`.
+- Priority: P0. Labels: `documentation`, `observability`. **Done** — mechanically enforced: `observability`'s CI runs `check-runbook-coverage.sh` against `runbooks/README.md`'s table on every PR (backlog #117); every alert covered.
 
 **23. Chaos / failure-injection test plan — Done (3/3)**
 - Purpose: Confidence that the alerts and runbooks actually work, proven before a real incident does it for us — and a source of real evidence (logs, metrics, screenshots) for writeups, not a narrative constructed after the fact.
@@ -250,19 +250,19 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Purpose: `api`/`workers` have memory limits set but no CPU limits anywhere in their manifests today, except `clinvar-service` (`platform/kubernetes/clinvar-service/deployment.yaml`, which sets both) — a runaway CPU-bound process in `api`/`workers`/`gateway` has no ceiling, and no namespace has a `ResourceQuota` capping total consumption either, on a single-node cluster where one namespace's runaway pod affects every other namespace's remaining capacity.
 - Acceptance Criteria: a `LimitRange` per namespace defaulting a CPU limit for any container that doesn't set one explicitly; a `ResourceQuota` per namespace bounding total CPU/memory request+limit; a CI check (`platform` repo) that fails a PR introducing a container manifest with no CPU/memory limit, rather than relying on manual review — the gap this item exists to close was only found by an external review, not caught earlier.
 - Dependencies: none.
-- Priority: P1. Labels: `platform`.
+- Priority: P1. Labels: `platform`. **Done** — `LimitRange`+`ResourceQuota` deployed for every namespace, CI gate wired (`platform/.github/workflows/ci.yml` runs `scripts/check-resource-limits.sh`).
 
 **36. Remove Secret non-idempotency at the root: `existingSecret` migration**
 - Purpose: platform#34 (Postgres Secret regeneration, confirmed recurring twice — see `docs/SESSION_STATE.md`) was patched with `spec.ignoreDifferences` (platform#40) on each affected Bitnami chart's generated Secret (`postgresql`, `redis`, `clinvar-postgresql`, `kafka`) — a workaround that stops ArgoCD from fighting the drift in its diff view, not a fix for the drift's actual cause (`common.secrets.passwords.manage`'s reuse-idempotency depends on a live-cluster Helm `lookup()` that ArgoCD's `helm template` rendering never performs, per `SESSION_STATE.md`'s "suspected but unconfirmed cause"). The root cause is still live; only its visibility to ArgoCD was suppressed.
 - Acceptance Criteria: all four charts migrated from chart-generated passwords to a pre-created Kubernetes Secret referenced via each chart's `auth.existingSecret` (or equivalent) value, removing the chart's ability to generate or regenerate a password at all. Once migrated, the `ignoreDifferences` blocks platform#40 added are removed as no longer needed, not left in place redundantly. If this changes how Secrets are provisioned/rotated meaningfully, a small ADR recording the decision may be warranted — noted here for whoever picks this up, not written as part of this item.
 - Dependencies: none.
-- Priority: P1. Labels: `platform`, `security`.
+- Priority: P1. Labels: `platform`, `security`. **Done** — `existingSecret` confirmed in `postgresql.yaml`/`redis.yaml`/`clinvar-postgresql.yaml` (platform#36), old `ignoreDifferences` blocks removed; Kafka never generated a chart password (PLAINTEXT broker), so it was never in scope of the actual bug.
 
 **37. Rollback runbook: prove a one-command deploy rollback**
 - Purpose: every deploy path (an image-tag bump merged, ArgoCD syncing it) is documented and exercised constantly; the reverse — rolling a bad deploy back — has never been proven end to end, and is exactly the action needed under real incident pressure, not the moment to be discovering the steps for the first time.
 - Acceptance Criteria: a runbook (`observability/runbooks/` or the `platform` repo) documenting the actual one-command rollback path (reverting the image-tag-bump commit and letting ArgoCD sync, or `argocd app rollback`) for at least one service; timed once for real against the live cluster, with the elapsed time recorded in the runbook as a real reference point, not an estimate.
 - Dependencies: none.
-- Priority: P1. Labels: `platform`, `documentation`.
+- Priority: P1. Labels: `platform`, `documentation`. **Done** — `platform/docs/runbooks/rollback.md` records a real timed drill (2026-07-26): 54s rollback, ~57s roll-forward, against the live cluster.
 
 ---
 
@@ -281,13 +281,13 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Purpose: Close the project's previously-flagged provenance gap — ingest ClinVar's GRCh38 VCF on a recurring schedule and persist which release (version/date, parsed from the VCF's own header, not file mtime) backs each stored record.
 - Acceptance Criteria: Ingestion runs inside the existing `workers` shape (no Kubernetes Job) via an in-process scheduled trigger, downloads and tabix-indexes the VCF, records a `clinvar_release` row with header-derived `published_date` and a variant count matching the source file. A manual admin-triggered re-ingestion path exists for dev/CI. Re-ingesting a new release does not destroy provenance of previously served/cached answers. Ingestion failures are observable, not silent.
 - Dependencies: #27.
-- Priority: P0. Labels: `backend`.
+- Priority: P0. Labels: `backend`. **Done** — `clinvar-service/app/scheduler.py` implements real recurring APScheduler ingestion with release tracking, per AC.
 
 **26. Release-aware cache invalidation for variant lookups**
 - Purpose: Introduce the project's first real invalidation-on-write cache behavior. Existing caching (#15, Redis, ADR 0016) is TTL-only; variant lookups must actively invalidate when a new ClinVar release changes a cached variant's classification, not merely expire.
 - Acceptance Criteria: On a completed ingestion (#25), only cache entries actually present in Redis are diffed against the new release (not a full-dataset diff) and evicted where classification changed. Invalidation-triggered eviction is a distinct, independently observable Micrometer counter from TTL expiry. Test proves a seeded stale entry is evicted immediately following a new-release ingest, verified via the counter and a live Redis check, not mocked.
 - Dependencies: #25, #15.
-- Priority: P0. Labels: `backend`.
+- Priority: P0. Labels: `backend`. **Done** — `VariantInvalidationService`/`VariantAnnotationCacheService`/`ClinVarCacheInvalidationListener` exist and live in `services/api`.
 
 **27. ~~ClinVar/gnomAD storage footprint and refresh scheduling~~ — CLOSED, superseded by ADR 0019**
 - Written against ADR 0018's original design (shared RWX PVC across `api`/`workers`). ADR 0019 replaced this after two real cross-namespace bugs (a PVC, then a Postgres Secret, neither shareable across the `api`/`workers` boundary): `clinvar-service` got its own dedicated namespace, PVC, and Postgres instead of a shared one, and `workers` was reverted to stateless. The actual provisioning this item wanted already shipped, in a different shape, via platform#36/#38. Closed as superseded (ADR 0020); no replacement item needed.
@@ -345,7 +345,7 @@ Note the boundary against ADR 0021: this is not a resurrection of #34
 - Purpose: every SLO (#21), alert rule, dashboard (#20/#29), and chaos fact pack in this project was produced against a cluster that is idle except when someone types a `curl`. Chaos scenarios 1 and 2 both recorded the consequence live: `ApiHighErrorRate` needs ~5 minutes of sustained non-zero traffic and did not fire until ~6 minutes of failing traffic was generated *by hand* on purpose. Consumer-lag (chaos scenario 3, still open) is not even meaningfully testable without a sustained produce rate. This is explicitly **not** backlog #34, closed by ADR 0021/S7 — #34 wanted a one-off k6/vegeta run to derive a "capacity baseline", which on a single laptop node measures the laptop. This item derives no number and claims no baseline; it is a permanently-running workload so that every other signal in the system has something real to measure. Stated openly: traffic you author yourself is still not user demand, which is why #21b (burn-rate policy) stays closed (ADR 0022).
 - Acceptance Criteria: a small generator component (own namespace, own ArgoCD Application, deliberately the simplest thing that works — a container running a script is a valid answer; it does not need to be a Spring Boot service) drives all three real paths continuously: `POST`/`GET /work-items` (producing genuine Kafka throughput and cache hit/miss ratios), `GET /variants/lookup` against a *skewed* key distribution (a hot set of a few rsIDs plus a long tail, so #29's hot-key panel plots something real), and a configurable non-zero error/404 fraction. Request rate follows a shaped, non-flat pattern over the day (a diurnal curve or a step schedule) so dashboards show variance rather than a flat line — a flat rate teaches nothing about saturation. Rate is a single configurable value that can be turned down to near-zero without a redeploy. Generated traffic is distinguishable from real manual traffic at query time (a dedicated user-agent or header surfaced as a metric label/log field), so no dashboard or fact pack ever silently attributes synthetic load to a real request. Its own resource limits are set with the #35 cold-start lesson applied. Confirmed live: 24 hours of continuous operation with the existing golden-signal dashboards showing real, varying series, and node CPU/memory headroom recorded before and after.
 - Dependencies: #21a (real histogram/lag metrics, done).
-- Priority: P0. Labels: `observability`, `platform`.
+- Priority: P0. Labels: `observability`, `platform`. **Done** — PROJECT.md confirms it live ("the continuous workload generator (#45)"); `workload-generator` namespace live, manifests under `platform/kubernetes/workload-generator/`.
 
 **46. Progressive delivery: Argo Rollouts with an automated SLO analysis gate**
 - Purpose: the project has a proven *forward* deploy path (image-tag bump → ArgoCD sync) and a proven manual rollback (#37), but no automated safety between them — and it has already been bitten by exactly what that gap allows. During the #35 resource-governance work a routine rollout sat in `CrashLoopBackOff` for **95 minutes** while the old pod kept serving traffic, because a Kubernetes rolling update's default behaviour is to leave the old ReplicaSet up: the deploy was completely stuck and nothing was visibly "down", so nothing alerted and nobody noticed until someone looked. A canary with an automated analysis step turns that silent 95-minute stall into an automatic abort with a reason attached. This composes with what already exists rather than adding a parallel stack: the analysis queries the *same* Prometheus and the *same* SLO expressions #21 already wrote, against the real traffic #45 now guarantees.
@@ -1166,7 +1166,7 @@ Guiding cut/keep calls (the reasoning; the actions are S1–S7 below):
   ever arrives, reintroducing an edge service (or Traefik middleware) is a
   fresh, deliberate decision — not a reason to keep an empty one now.
 - Dependencies: none. ADR 0021.
-- Priority: P1. Labels: `platform`, `backend`, `architecture`.
+- Priority: P1. Labels: `platform`, `backend`, `architecture`. **Done** — confirmed live: no `gateway` namespace, no `platform/kubernetes/gateway/` or `argocd/apps/gateway.yaml`, no `gateway` entry in `services/pom.xml`'s modules, no `gateway` CI matrix entries.
 
 **S2. Remove the `whoami` proof app**
 - Purpose: `traefik/whoami` was M1's end-to-end proof that Traefik +
@@ -1180,7 +1180,7 @@ Guiding cut/keep calls (the reasoning; the actions are S1–S7 below):
   in `docs/architecture/overview.md` and `.claude/PROJECT.md` (which both
   currently cite `whoami` as that proof).
 - Dependencies: S1 (so a real Ingress exists before whoami's is removed).
-- Priority: P2. Labels: `platform`.
+- Priority: P2. Labels: `platform`. **Done** — confirmed live: no `whoami` namespace, no `platform/kubernetes/whoami/` or `argocd/apps/whoami.yaml`.
 
 **S3. Drop gnomAD enrichment; make ClinVar the sole annotation source — DONE**
 - Purpose: gnomAD was never built; its real footprint (~7.7GB, per
@@ -1420,17 +1420,17 @@ M7's substrate arc, not new M17 scope; #152 records the actual go/no-go.
 - Dependencies: none.
 - Priority: P1. Labels: `security`, `platform`, `enhancement`.
 
-**143. Gate the stale-OOM arm of ContainerCrashLoopOrOOMKilled on restart recency**
-- Purpose: The #125 ContainerCrashLoopOrOOMKilled alert's OOM arm keys on `kube_pod_container_status_last_terminated_exitcode == 137` with no recency bound, so a single one-off OOM fires severity: critical indefinitely until the pod is recreated. Verified live 2026-08-22: three instances firing — mimir (71+ restarts, a true chronic positive) but also prometheus-server and beyla (one lifetime restart each, OOMed once on 2026-08-18, healthy since). Two of three currently-firing criticals are stale noise, degrading trust in the one channel that pages, three days after the alert shipped. This is the highest signal-to-noise cost in the whole alert set and the smallest fix — it goes to the front of M17's queue.
-- Acceptance Criteria: the OOM arm is gated on restart recency (`and increase(kube_pod_container_status_restarts_total[15m]) > 0`, or a last_terminated_timestamp recency window — approach recorded) so a stale exit-code-137 gauge no longer fires on its own. Verified live: prometheus-server and beyla stop firing, while mimir (a genuine chronic positive) correctly still fires — confirming the gate silences stale noise without suppressing real chronic OOM. WorkloadRestartingFrequently's existing well-calibrated behaviour is left untouched. Note the coupling to the Mimir decision (#135): the gate correctly keeps Mimir crying legitimately, which is another reason to resolve Mimir, not a substitute for it.
-- Dependencies: none — front of queue, independent of everything else.
-- Priority: P1. Labels: `observability`, `bug`.
+**143. Gate the stale-OOM arm of ContainerCrashLoopOrOOMKilled on restart recency + add promtool test rules to observability loop targets**
+- Purpose: The #125 ContainerCrashLoopOrOOMKilled alert's OOM arm keys on `kube_pod_container_status_last_terminated_exitcode == 137` with no recency bound, so a single one-off OOM fires severity: critical indefinitely until the pod is recreated. Verified live 2026-08-22: three instances firing — mimir (71+ restarts, a true chronic positive) but also prometheus-server and beyla (one lifetime restart each, OOMed once on 2026-08-18, healthy since). Two of three currently-firing criticals are stale noise, degrading trust in the one channel that pages, three days after the alert shipped. This is the highest signal-to-noise cost in the whole alert set and the smallest fix — it goes to the front of M17's queue. Additionally, `promtool check rules` and `promtool test rules` (a single static binary) validate Prometheus rule syntax at render-time and allow unit testing of alert rule logic; three real defects of exactly this class already shipped (#145's selector rendering nothing, #91's blend trap, this item's own staleness gate), justifying adoption as a loopable render-time check for bounded verification loops (ADR 0046).
+- Acceptance Criteria: (1) the OOM arm is gated on restart recency (`and increase(kube_pod_container_status_restarts_total[15m]) > 0`, or a last_terminated_timestamp recency window — approach recorded) so a stale exit-code-137 gauge no longer fires on its own. Verified live: prometheus-server and beyla stop firing, while mimir (a genuine chronic positive) correctly still fires — confirming the gate silences stale noise without suppressing real chronic OOM. WorkloadRestartingFrequently's existing well-calibrated behaviour is left untouched. Note the coupling to the Mimir decision (#135): the gate correctly keeps Mimir crying legitimately, which is another reason to resolve Mimir, not a substitute for it. (2) `promtool` binary installed in the `observability` container or the CI environment; `promtool check rules` and `promtool test rules` against `observability/alerting_rules.yml` proven to catch a real rule defect (existing or introduced deliberately for proof), and integrated into the CI pipeline for render-time validation. One self-test fixture (a deliberately-broken rule, a deliberately-wrong test) added to prove CI catches it before merge.
+- Dependencies: #91 is the primary defect this targets; none blocking the gate itself.
+- Priority: P1. Labels: `observability`, `bug`, `platform`.
 
-**144. The observability stack can't see its own backends: self-metrics scrape + a backend-health alert**
-- Purpose: Verified live 2026-08-22 — count(cortex_build_info), count(loki_build_info), and count(tempo_build_info) all return zero series, and there are 0 recording rules in the whole Prometheus instance. The telemetry backends (Mimir, Loki, Tempo, Pyroscope) emit no self-metrics that Prometheus scrapes, and there is no Prometheus→Mimir remote-write-failure alert. This is the worst combination the audit named: the one component actively failing (Mimir, 71+ restarts live) is also Prometheus's own long-term-storage target and is the one component with no health signal, so if it dies mid-compaction #94's 30-day retention story degrades silently and nothing pages.
-- Acceptance Criteria: self-metric scrape configs added for the telemetry backends that survive the Mimir decision — Loki, Tempo, and Pyroscope unconditionally, Mimir only if #135's outcome keeps it — verified live by a non-zero series count for each (`count(loki_build_info) > 0`, etc.). Plus a backend-health alert on the storage path: a Prometheus→Mimir remote-write-failure alert if Mimir stays, or a target-absent (LokiDown/TempoDown-class) alert regardless — each with a runbook per the project's 1:1 alert-runbook standard (#117). Scoped explicitly to survive #135's outcome so the two items don't collide: the Mimir-specific arm is conditional, the Loki/Tempo/Pyroscope self-metrics and generic backend-down alert are unconditional.
-- Dependencies: #135 (only for whether the Mimir-specific arm is built; the rest is independent).
-- Priority: P1. Labels: `observability`.
+**144. The observability stack can't see its own backends: self-metrics scrape + a backend-health alert + promtool test rules integration**
+- Purpose: Verified live 2026-08-22 — count(cortex_build_info), count(loki_build_info), and count(tempo_build_info) all return zero series, and there are 0 recording rules in the whole Prometheus instance. The telemetry backends (Mimir, Loki, Tempo, Pyroscope) emit no self-metrics that Prometheus scrapes, and there is no Prometheus→Mimir remote-write-failure alert. This is the worst combination the audit named: the one component actively failing (Mimir, 71+ restarts live) is also Prometheus's own long-term-storage target and is the one component with no health signal, so if it dies mid-compaction #94's 30-day retention story degrades silently and nothing pages. Additionally, `promtool test rules` allows unit testing of alert rule logic against synthetic time-series data, validating not just syntax (handled by `promtool check rules`, part of #143) but correctness — three real defects of exactly this class already shipped, and this item is the natural home for the rules-testing half of render-time validation (see #143 for check/syntax, this item for test/logic).
+- Acceptance Criteria: (1) self-metric scrape configs added for the telemetry backends that survive the Mimir decision — Loki, Tempo, and Pyroscope unconditionally, Mimir only if #135's outcome keeps it — verified live by a non-zero series count for each (`count(loki_build_info) > 0`, etc.). Plus a backend-health alert on the storage path: a Prometheus→Mimir remote-write-failure alert if Mimir stays, or a target-absent (LokiDown/TempoDown-class) alert regardless — each with a runbook per the project's 1:1 alert-runbook standard (#117). Scoped explicitly to survive #135's outcome so the two items don't collide: the Mimir-specific arm is conditional, the Loki/Tempo/Pyroscope self-metrics and generic backend-down alert are unconditional. (2) `promtool test rules` test cases written for the real alert rules in `observability/alerting_rules.yml`, each test encoding a concrete failure scenario that should trigger, and at least one scenario that should *not* trigger (a negative case proving the logic is precise, not overly broad). At least one existing real alert rule (e.g., this item's own backend-health alert, or #143's OOM recency gate) has a test case covering its own logic change. Verified live: test suites pass cleanly before merge.
+- Dependencies: #135 (only for whether the Mimir-specific arm is built; the rest is independent). #143 for the `promtool check rules` integration.
+- Priority: P1. Labels: `observability`, `platform`.
 
 **145. Fix or retire the beyla-vs-manual dashboard, and harvest the A/B article**
 - Purpose: Every Beyla-side panel in the beyla-vs-manual dashboard queries `job="<ns>/<svc>"` (job="api/api", etc.), but Beyla actually emits everything under `job="beyla"` (101 series live) with service identity in service_name/k8s_deployment_name. The job selector matches nothing — 3 of 5 panels are blank, and the dashboard's entire reason to exist, the A/B comparison that is Beyla's stated justification (ADR 0036), does not render. Doubly relevant because that comparison is the article meant to redeem Beyla's ~800Mi footprint, and this is the "harvest" half of the audit's harvest-then-remove call on Beyla; the "then decide" half is the #127 ledger update.
@@ -1450,27 +1450,27 @@ M7's substrate arc, not new M17 scope; #152 records the actual go/no-go.
 - Dependencies: #97 (Done — this extends it).
 - Priority: P2. Labels: `documentation`, `platform`.
 
-**148. Triage the stale adamastorx#242 — DONE, closed and re-filed as #157**
+**148. Triage the stale adamastorx#242 — DONE, closed and re-filed as #159**
 - Purpose: adamastorx#242 ("bake api's Pyroscope agent jar into the image") has been open since 2026-08-10, CI green, orphaned — the project's own "open a PR and it moves" flow has one rotting exception, the one loose end the 2026-08-21 audit's process observation named.
 - Acceptance Criteria: adamastorx#242 is either merged (if still correct against current main) or closed with a one-line reason recorded — no third state. If merged, a quick confirm that its change still applies cleanly and doesn't regress the live api Pyroscope injection (ADR 0028).
 - Dependencies: none.
-- Priority: P3. Labels: `good-first-issue`. **Done (2026-08-23)** — not mergeable as-is: #242's own heading number (`122`) now collides with the real, unrelated #122 filed after it (a different item, "Close the four live alerts..."). Closed with that reason. The underlying finding was real and not done elsewhere, so re-filed cleanly under the next free number as #157, rather than lost.
+- Priority: P3. Labels: `good-first-issue`. **Done (2026-08-23)** — not mergeable as-is: #242's own heading number (`122`) now collides with the real, unrelated #122 filed after it (a different item, "Close the four live alerts..."). Closed with that reason. The underlying finding was real and not done elsewhere, so re-filed cleanly under the next free number as #159, rather than lost.
 
 **149. PreToolUse safety hook enforcing the GitOps mutation rule**
 - Purpose: The project is built almost entirely through Claude Code sessions and uses exactly one of the tool's capabilities (persona sub-agents); `.claude/` has no hooks, settings.json, skills, or MCP across any of the four repos. WORKFLOW.md's hard safety rule — never kubectl apply/patch/delete or terraform apply/destroy outside read-only inspection without explicit human confirmation — is currently prose the model is trusted to honor. A PreToolUse hook can enforce it, turning a trust-based safety story into a real one. This is the biggest miss the 2026-08-21 audit named and is itself the freshest owned article angle the project has: the platform is AI-built and AI-operated, with the safety rails themselves AI-enforced.
-- Acceptance Criteria: a PreToolUse hook in `.claude/settings.json` that deny-lists mutating kubectl verbs (apply/patch/delete/scale/replace/edit/annotate/label against live state) and terraform apply/destroy unless a confirmation token is present, while leaving read-only inspection (get/describe/logs/top, plan) unblocked. Verified with a real test, not a config diff alone: a mutating command is actually blocked without the token and actually permitted with it; a read-only command is never blocked. The hook's design (token mechanism, scope, how it's documented for the owner) recorded in WORKFLOW.md's Safety section, replacing the trust-based-prose framing with the enforced one. Feeds #129's article queue as a named target.
+- Acceptance Criteria: a PreToolUse hook in `.claude/settings.json` that deny-lists mutating kubectl verbs (apply/patch/delete/scale/replace/edit/annotate/label against live state), terraform apply/destroy, `gh pr merge`, `git push --force`, and `helm upgrade/install/uninstall` unless a confirmation token is present, while leaving read-only inspection (get/describe/logs/top, plan) and git/PR read operations unblocked. Verified with a real test, not a config diff alone: a mutating command is actually blocked without the token and actually permitted with it; a read-only command is never blocked. The hook's design (token mechanism, scope, how it's documented for the owner) recorded in WORKFLOW.md's Safety section, replacing the trust-based-prose framing with the enforced one. Feeds #129's article queue as a named target.
 - Dependencies: none.
 - Priority: P1. Labels: `security`, `platform`, `enhancement`.
 
-**150. SessionStart hook: export KUBECONFIG and surface the known-gremlin list**
-- Purpose: KUBECONFIG is a documented every-session footgun — it does not persist and is blocked from `~/.bashrc`, so every session re-exports it by hand. And the project maintains a live known-gremlin log in `SESSION_STATE.md` (the root-refresh ArgoCD tax that bit both the #125 and #126 work, the Boot-4-autoconfig and Cilium-DNS-proxy traps) that a session has to remember to read. Both are exactly what a SessionStart hook removes.
-- Acceptance Criteria: a SessionStart hook in `.claude/settings.json` that exports KUBECONFIG to `platform/terraform/kubeconfig` (verified: a fresh session can run `kubectl get nodes` without a manual export) and surfaces the current known-gremlin list at session start (sourced from SESSION_STATE.md or a small maintained list, so it's read rather than rediscovered). Kept to convenience/surfacing only — it makes no cluster mutation itself (that's #149's domain). Documented alongside the safety hook so the two hooks' roles are distinct and clear.
+**150. SessionStart hook: surface KUBECONFIG path and known-gremlin list**
+- Purpose: KUBECONFIG path and the known-gremlin log in `SESSION_STATE.md` (the root-refresh ArgoCD tax, the Boot-4-autoconfig and Cilium-DNS-proxy traps) are documented every-session footguns that a session has to remember to read or re-discover. A SessionStart hook surfaces both, removing the rediscovery step without the security anti-pattern of exporting cluster credentials into every session's environment.
+- Acceptance Criteria: a SessionStart hook in `.claude/settings.json` that (1) surfaces the KUBECONFIG path (`platform/terraform/kubeconfig`), so a session can evaluate how to use it without it being auto-exported into the environment, (2) surfaces the current known-gremlin list at session start (sourced from SESSION_STATE.md or a small maintained list, so it's read rather than rediscovered), and (3) explicitly does NOT export KUBECONFIG as an environment variable — the bounded verification loop discipline (ADR 0046) depends on loops running without cluster credentials in their environment as a mechanical gate. Verified: a fresh session can reference the surfaced path without a manual lookup. Documented alongside #149's safety hook so the two hooks' roles are distinct and clear.
 - Dependencies: none.
-- Priority: P2. Labels: `platform`, `enhancement`.
+- Priority: P2. Labels: `platform`, `enhancement`, `security`.
 
 **151. Two Skills: the canary drill and the verify-live-Done / post-rebuild checklist**
-- Purpose: The project has a growing library of exact, repeatable procedures that currently live as runbook prose the model re-reads each time and can apply inconsistently: the canary drill cadence (#136 — literally a recurring, scripted procedure with a known whole-Service-scrape ambiguity gotcha) and the post-rebuild acceptance / verify-live-before-marking-Done discipline (#123, with the Cilium toPorts-uses-container-port trap and the root-refresh-first rule). Each is a natural Claude Code Skill — a named, loadable procedure that encodes the steps and the known gotchas so they're applied consistently instead of rediscovered.
-- Acceptance Criteria: two Skills authored under `.claude/` (or the repo's skills location): (1) a canary-drill Skill encoding `platform/docs/runbooks/canary.md`'s exact `kubectl argo rollouts get/promote/abort/retry` sequence, the #46 baseline (2m56s clean / 3m01s abort), the dated-postscript recording convention, and the whole-Service-scrape ambiguity to record honestly; (2) a verify-live-Done / post-rebuild Skill encoding the #123 business-path acceptance checklist and the flannel-restore path, including the container-port-not-Service-port and root-refresh-first gotchas. Each Skill is proven by being invoked on a real procedure at least once and producing the documented steps/gotchas, not just committed as a file. MCP and auto-memory are explicitly out of scope this milestone.
+- Purpose: The project has a growing library of exact, repeatable procedures that currently live as runbook prose the model re-reads each time and can apply inconsistently: the canary drill cadence (#136 — literally a recurring, scripted procedure with a known whole-Service-scrape ambiguity gotcha) and the post-rebuild acceptance / verify-live-before-marking-Done discipline (#123, with the Cilium toPorts-uses-container-port trap and the root-refresh-first rule). Each is a natural Claude Code Skill — a named, loadable procedure that encodes the steps and the known gotchas so they're applied consistently instead of rediscovered. Both encode **human-gated live procedures** that are explicitly **not** loop targets (ADR 0046 §2).
+- Acceptance Criteria: two Skills authored under `.claude/` (or the repo's skills location): (1) a canary-drill Skill encoding `platform/docs/runbooks/canary.md`'s exact `kubectl argo rollouts get/promote/abort/retry` sequence, the #46 baseline (2m56s clean / 3m01s abort), the dated-postscript recording convention, and the whole-Service-scrape ambiguity to record honestly; with a header comment stating "human-gated live procedure, not a loop target"; (2) a verify-live-Done / post-rebuild Skill encoding the #123 business-path acceptance checklist and the flannel-restore path, including the container-port-not-Service-port and root-refresh-first gotchas, with the same header comment. Each Skill is proven by being invoked on a real procedure at least once and producing the documented steps/gotchas, not just committed as a file. MCP and auto-memory are explicitly out of scope this milestone.
 - Dependencies: none (canary Skill references #136's mechanism, post-rebuild Skill references #123 — both already exist).
 - Priority: P2. Labels: `documentation`, `platform`, `enhancement`.
 
@@ -1478,24 +1478,24 @@ M7's substrate arc, not new M17 scope; #152 records the actual go/no-go.
 - Purpose: The owner has new hardware. The 2026-08-21 audit recommends migrating the live platform off the T460s and keeping the constraint as documented history — reasoning independently checked and accepted: the constraint's narrative dividend is already banked (ADR 0040/0041), its operational cost is growing (memory 111% overcommitted, 4–5Gi swap at rest, Mimir OOMing every ~6h, #69's real Nextflow pipeline permanently blocked), and the migration itself is the next chapter of the owned-hardware story ("I moved a live GitOps platform to new hardware — here's the RTO and what didn't come back"). This is the successor to #104's question, which PROJECT.md itself records as "open again in practice" after ADR 0040's capacity math superseded ADR 0035's VM-interim decision — #104 stays Done (it recorded a real past decision); this item records the current one. It is an owner decision, not pure engineering.
 - Acceptance Criteria: an ADR recording the go/no-go decision with the audit's reasoning and the current live costs as input, and — on go — pinning down whether the new host is a genuine multi-node substrate (unblocking #51/#52 as well) or a single beefier node (which retires the memory-pressure/OOM class and unblocks #69/mesh but not the multi-node drills). A hard, non-negotiable precondition recorded: preserve #94's 30-day Prometheus history across the move — either migrate after #94's window closes (~2026-09-06) and its SLO-over-time report is written, or carry the PVC across with the #49 PVC-copy discipline; a naive host move that resets that clock is explicitly ruled out. A cloud annex remains rejected for ADR 0040 §6's stated reasons. The migration plan names the restore-drill sequence (#153/#154/#155) as its execution path.
 - Dependencies: #94 (its 30-day window / history-preservation constraint). Owner action required for the go/no-go decision and the hardware.
-- Priority: P1. Labels: `architecture`, `platform`.
+- Priority: P1. Labels: `architecture`, `platform`. **Done (2026-08-30, ADR 0045)** — go. New host confirmed a genuine multi-node substrate (unblocks #51/#52), already physically available. #94's history-preservation precondition: owner chose to carry the Prometheus PVC across now via #49's proven PVC-copy pattern (with an explicit `runAsUser` `chown` step, learned from #94's own 2026-08-09 incident) rather than wait for the 30-day window (~2026-09-06) to close on its own. Cloud annex stays rejected per ADR 0040 §6. #153 (restore drill) unblocked, can start immediately.
 
 **153. Pre-migration restore drill on the new host**
 - Purpose: The audit is explicit that the migration is a restore drill and must be run as one, not winged — using #23a (Done) and the #123 acceptance checklist, on the new host, before any cutover. This proves the restore path works on the new hardware and measures a real RTO, the de-risking step both of the hard preconditions demand and the flannel-restore/#123 precedent for how this project plans a risky infra change before executing it.
 - Acceptance Criteria: a full restore drill executed on the new host from the existing backups (the pg_dump PVCs and, per #99's scope, the Terraform state), following #123's business-path acceptance checklist — every assertion walked live PASS — and #94's history-preservation method (from #152) exercised so it is proven, not assumed, before cutover. A real, measured RTO recorded. Any gap found on the new hardware is recorded and resolved before the cutover proceeds.
 - Dependencies: #152 (go decision), new hardware physically available, #23a (Done), #123 (Done).
-- Priority: P1. Labels: `platform`, `testing`.
+- Priority: P1. Labels: `platform`, `testing`. **Done (2026-08-30, `platform` runbook `docs/runbooks/hardware-migration-drill.md`)** — real drill run against the NucBox K8 Plus, full account (real gremlins hit, real numbers) in that runbook's own dated postscript rather than duplicated here. 5/6 of #123's checklist items PASS outright; the 6th (`probe_success`) fails only because public DNS still points at the T460s — correctly out of this drill's scope, #154's own job to move, not a data or mechanism gap. Prometheus's 30-day history (#94) and all three Postgres instances restored and verified live (BRCA1 spot-check byte-for-byte identical). One real, separate finding surfaced and deliberately not fixed here: three consecutive real `Failed` runs on the old host's `postgresql-backup` CronJob family — filed as #157. #99's Terraform-state gap stays open, unchanged, tracked separately.
 
 **154. Execute the migration cutover**
 - Purpose: The actual move — the live GitOps platform onto the new host — executed only after the restore drill (#153) passes, with #94's retained Prometheus history carried across intact per the method chosen in #152. This is the migration itself, distinct from the drill that de-risks it and the acceptance that confirms it, following the #49-rebuild-then-#123-acceptance precedent of separating execution from proof.
 - Acceptance Criteria: the platform is running on the new host with all ArgoCD Applications Synced/Healthy, #94's 30-day history confirmed present on the migrated cluster (not reset), and the T460s constraint recorded as documented history from a real cutover date. The cutover's real elapsed time and any manual interventions recorded honestly for the migration article.
 - Dependencies: #153 (drill passing).
-- Priority: P1. Labels: `platform`.
+- Priority: P1. Labels: `platform`. **Done (2026-08-30/31)** — real cutover executed, full account in `platform`'s `docs/runbooks/hardware-migration-drill.md` dated postscript (same file as #153, second dated section, to keep the drill-vs-cutover history in one place rather than a second near-duplicate runbook). Fresh Postgres dumps + a fresh Prometheus PVC-copy (this time using the `kubectl cp <src>/.` trailing-dot form, avoiding #153's own nesting gremlin) replaced the drill's stale data with real, current cutover-time data — verified against the live T460s source (row counts match within the seconds-wide gap between dump and check). `/etc/hosts` on both operator machines repointed `*.local.adamastorx.test` at the NucBox's Tailscale address; k3s stopped on the T460s (`systemctl stop k3s`, confirmed `inactive`) after ArgoCD's own `selfHeal` correctly reverted a first, wrong attempt at stopping individual app Deployments (git-declared replicas is the actual source of truth across *both* clusters, since they share one `argocd/apps/` tree — a real, structural fact worth knowing, not a bug). Two more real gremlins found and fixed live during the cutover itself, both git-tracked: `blackbox-exporter`'s hardcoded Traefik ClusterIP (backlog #122's own predicted recurrence — platform#210) and ArgoCD's own `server.insecure` flag, previously only a manual untracked step that silently didn't survive #49's rebuild either, now a real GitOps-tracked ConfigMap (platform#211).
 
 **155. Post-migration acceptance and RTO/what-didn't-come-back write-up**
 - Purpose: Re-running #123's business-path acceptance on the migrated cluster and recording the honest end-to-end result is what turns the cutover into the "I moved a live GitOps platform to new hardware — here's the RTO and what didn't come back" evidence pack — the natural sequel to the rebuild-from-Git article. Separate from the cutover (#154) because acceptance is the proof, not the act — the #123 precedent.
 - Acceptance Criteria: #123's business-path acceptance checklist re-run on the migrated cluster, every assertion walked live PASS; #94's retained history confirmed intact end-to-end; the real end-to-end RTO and an honest "what didn't come back" list recorded as a dated fact pack, added to #129's article queue as the migration article's evidence. Any post-migration regression tracked as its own item rather than glossed.
-- Dependencies: #154 (cutover complete).
+- Dependencies: #154 (cutover complete). **Done (2026-08-30/31)** — #123's checklist re-run against the real post-cutover NucBox: **6/6 PASS**, including `probe_success` (0 was #153's own honestly-deferred item, closed by platform#210's fix). #94's history confirmed intact via the same multi-offset query technique, on the fresh cutover copy, not the drill's stale one. Real RTO, measured components (no single unbroken end-to-end timer — the two operator machines' `/etc/hosts` edits and the T460s `systemctl stop k3s` step were manual, human-paced, not scripted back-to-back): Postgres fresh dump+restore (all 3 instances) under 5 minutes; Prometheus fresh PVC-copy, T460s-side downtime 3m20s (22:04:31-22:07:51), NucBox-side full cycle to `Ready` ~14 minutes including the Tailscale transfer. **Honest "what didn't come back" list**: the real ntfy alert topic could not be recovered (no `sops`/`age` key available on the operator machine used for the cutover) — a fresh real topic was generated and the owner re-subscribed, tracked here rather than silently glossed; a synthetic test alert confirmed routed to the `ntfy` receiver live, but full end-to-end delivery to the ntfy.sh service itself was not independently re-confirmed in this pass (the mechanism is the same one #107 already proved end-to-end once); backlog #157 (the pg_dump CronJob's real Failed runs) remains open, found during #153 and not caused by the cutover, but a real, current gap in the migrated cluster's own backup coverage worth closing before relying on it again. Grafana's dashboards/datasources were not deeply re-verified beyond a login-page reachability check. No other post-migration regression found.
 - Priority: P1. Labels: `platform`, `documentation`.
 
 **156. Reset messageBuffer on websocket reconnect in market-data-ingestor**
@@ -1504,8 +1504,22 @@ M7's substrate arc, not new M17 scope; #152 records the actual go/no-go.
 - Dependencies: none (touches the same FinnhubWebSocketClient as #133 — coordinate if #133 is in flight).
 - Priority: P3. Labels: `backend`, `bug`, `good-first-issue`.
 
-**157. `api`'s Pyroscope agent jar is fetched from GitHub at every pod start — bake it into the image instead**
+**157. `postgresql-backup`/`clinvar-postgresql-backup`/`watchlist-postgresql-backup` CronJobs: real Failed runs after the host was powered off for several days**
+- Purpose: Found live during #153's restore drill (2026-08-30), not part of that item's own scope — all three backup CronJobs on the T460s show three consecutive real `Failed` job runs (`kubectl get jobs -n api` etc., ~11:17 today, three attempts ~14s apart), each producing a 0-byte dump file, with the last genuinely good dump for all three instances dated 2026-08-25 (5 days stale). Timing is consistent with the CronJob controller's own missed-run catch-up behavior firing multiple times right after the host came back online from being powered off for several days, colliding with Postgres not yet being ready to accept connections at each attempt — a real, plausible mechanism, not yet confirmed from pod logs (the failed Jobs' pods were already garbage-collected by the time this was investigated, so `kubectl describe job` shows no events and no logs are recoverable for the exact failure).
+- Acceptance Criteria: root cause confirmed (not just plausible) — either by reproducing the sequence (power off, wait past a scheduled run, power on, observe) or by finding a config lever that already explains it (e.g., no `startingDeadlineSeconds` set, allowing the controller to fire off every missed slot at once rather than skipping stale ones). A fix that prevents a *silent* 0-byte dump from being mistaken for a real backup — either the job script itself validates its own output (non-zero file size, or a real `pg_restore --list` sanity check) and fails loudly/alerts if the dump is empty, or `startingDeadlineSeconds` is set so missed runs are skipped rather than retried in a burst against a possibly-not-yet-ready database. Verified live: a deliberately-delayed Postgres readiness (or an equivalent reproduction) no longer produces a silently-accepted empty dump.
+- Dependencies: none.
+- Priority: P2. Labels: `platform`, `bug`, `observability`.
+
+**158. Extend check-resource-limits.sh: self-test fixtures, all-workload-kind glob, corrected header**
+- Purpose: `platform/scripts/check-resource-limits.sh` is a `yq` assertion validating CPU/memory limits on all Kubernetes workload manifests — a render-time, loopable check under ADR 0046's broken-fixture discipline. Verified live 2026-10-02: the existing `kubernetes/*/deployment.yaml` glob catches 10 directories but **silently misses `api`**, which is now an Argo Rollout (`kubernetes/api/rollout.yaml` under M6/#46) — `api` is compliant today, but the glob has been vacuous for it since, the exact anti-pattern this item exists to close. Additionally, the script has no self-test fixtures to prove the checker actually fails on violations (the broken-fixture bar from ADR 0046's own discipline), and the header comment lists only `Deployment`, not the full set of workload kinds the script actually checks. No human-run violations missed, but the *mechanism* is fragile and untested — the kind of thing a bounded loop should not be handed as a stop condition.
+- Acceptance Criteria: (1) the glob extended to catch all workload kinds (`kubernetes/*/{deployment,statefulset,daemonset,rollout,cronjob}.yaml`), catching `api`'s Rollout and any future workload variants. (2) self-test fixtures added — at least one each of a passing manifest (has both CPU and memory limits), a failing manifest (missing CPU limit), and a failing manifest (missing memory limit) — stored in `platform/scripts/fixtures/check-resource-limits/` alongside a zero-byte sentinel file or a real `.yaml` template to prove the check catches it. The check run against these fixtures (before applying to real manifests) demonstrably fails on the two failure cases and passes on the passing case, CI-verified. (3) The script's own header comment corrected to list all workload kinds checked (deployment, statefulset, daemonset, rollout, cronjob), removing the incomplete `Deployment`-only wording that masked the `api` gap. Verified live: a fresh `api` rollout manifest without limits fails the check; one with limits passes.
+- Dependencies: none — independent.
+- Priority: P2. Labels: `platform`, `documentation`, `bug`.
+
+**159. `api`'s Pyroscope agent jar is fetched from GitHub at every pod start — bake it into the image instead**
 - Purpose: Originally filed as adamastorx#242 (2026-08-10) — orphaned since, the one rotting exception to this project's own "open a PR and it moves" flow, named by the 2026-08-21 audit's process observation (backlog #148) and re-filed here under a free number rather than merged as-is, since #242's own heading number (`122`) now collides with the real, unrelated #122 ("Close the four live alerts...") that was filed after it. The underlying finding is unchanged and still real: writing backlog #50's NetworkPolicy for `api` found that `kubernetes/api/rollout.yaml`'s `pyroscope-agent-fetch` init container `curl`s `https://github.com/grafana/pyroscope-java/releases/download/v2.8.0/pyroscope.jar` fresh into an `emptyDir` on every real pod (re)creation, not baked into the image — a live public-internet dependency api's own steady-state traffic never reveals (a running-pod Hubble capture can't see a one-shot startup fetch), and a real fragility: a default-deny NetworkPolicy without an explicit, wildcard-matched `toFQDNs` allow for GitHub's release-asset CDN (confirmed live redirects to `release-assets.githubusercontent.com`, a subdomain GitHub has changed before) would silently brick every future `api` pod at `Init:Error` the next time one is created.
 - Acceptance Criteria: `pyroscope.jar` (the same real, pinned `v2.8.0` release currently fetched at runtime) downloaded once at image-build time (`services/api`'s own Dockerfile) and baked into the image, same pattern as every other pinned dependency this project already vendors rather than fetches live. The `pyroscope-agent-fetch` init container removed entirely — `JAVA_TOOL_OPTIONS`'s `-javaagent:/pyroscope-agent/pyroscope.jar` path points at the now-baked-in file directly. `kubernetes/api-network-policies/api-pyroscope-agent-egress.yaml` (backlog #50, platform#154) deleted once this lands — the whole reason that policy exists goes away with the runtime fetch. Real image build+push verified, real pod start confirmed profiling still works (Pyroscope UI shows fresh api samples) with the init container gone.
 - Dependencies: none — a `services` repo change, independent of #50's own NetworkPolicy work (which keeps the `toFQDNs` allow live as an honest, working interim fix until this lands).
 - Priority: P2. Labels: `platform`, `security`. Real, live gap — not urgent (the interim `toFQDNs` fix is real and working), but a standing, avoidable public-internet dependency on a service that otherwise has none, worth closing rather than leaving as permanent NetworkPolicy surface area.
+
+---

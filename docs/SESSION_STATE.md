@@ -6,9 +6,22 @@ threads, and things the next session shouldn't have to re-discover the
 hard way. Prune/rewrite freely as work completes; this file describes
 *current* state, not history (git history is the record of the past).
 
-Last updated: 2026-08-20.
+Last updated: 2026-10-02.
 
 ## Where things stand
+
+**ADR 0046 (bounded verification loops) adopted and merged across all four repos, 2026-10-02**
+— after a ~1-month interruption (last commit 2026-08-31, the cutover), a staff-engineer (Opus)
+review of the Ralph loop experiment (#156) concluded adoption narrowed to a named Implement/Test
+technique with 8 mechanically-checkable preconditions, not a project working model. Status: Proposed,
+with a 2026-12-01 review date or five recorded runs, whichever comes first. PRs merged in all four
+repos: `adamastorx`#337, `services`#92, `platform`#221, `observability`#39. All `.claude/settings.json`
+files committed at project scope (plugins: `ralph-wiggum@claude-code-plugins`, `mattpocock-skills@mattpocock`),
+enabled in `adamastorx` and `services` only; not `platform` or `observability`. Backlog items #149/#150/#151
+AC updated per the decision. New item #158 created for `check-resource-limits.sh` repair (self-test fixtures,
+all-workload-kind glob, header corrected). Operator connectivity finding: NucBox offline 33 days (Tailscale
+node key expired post-cutover); T460s online (k3s correctly stopped); /etc/hosts wrong IP; kubeconfig missing
+from this Mac (by design, not a gap).
 
 **Backlog #49 (Cilium/Hubble, replacing flannel) and #50 (first
 NetworkPolicies) are both Done and live, 2026-08-10** — the day's major

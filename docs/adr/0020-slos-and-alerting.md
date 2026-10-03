@@ -109,6 +109,21 @@ real, unaddressed gap:
   signal — `market_data_ticks_published_total`-shaped counters on the
   services it calls already cover the real signal it exists to
   exercise.
+- **`alloy-network-policies`, `api-network-policies`,
+  `clinvar-network-policies`, `kafka-network-policies`,
+  `prometheus-network-policies`, `workers-network-policies`** —
+  `CiliumNetworkPolicy` manifest batches (backlog #50, #126), not
+  workloads. They run no process and expose no request, latency, or
+  error signal of their own; what they enforce is observable through
+  Hubble drop verdicts and the protected namespace's own SLIs above.
+- **`vpa-objects`** — the `VerticalPodAutoscaler` objects (backlog
+  #101), recommendation-only: they never evict or resize a pod. A
+  recommendation is advisory data, not a service with a golden
+  signal; the recommender component itself is `vpa`.
+- **`mimir`** — a monolithic-mode experiment (ADR 0038, backlog
+  #108), deliberately not load-bearing for anything else, with an
+  open decommission decision (backlog #135). It serves no
+  user-facing traffic, so it has no SLI of its own to hold an SLO to.
 
 ### Alerting mechanism
 
