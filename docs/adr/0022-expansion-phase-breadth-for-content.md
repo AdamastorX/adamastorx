@@ -1,6 +1,6 @@
 # 0022. Expansion phase: breadth and novelty for content, and which ADR 0021 cuts stand
 
-Status: Proposed
+Status: Accepted
 
 ## Context
 

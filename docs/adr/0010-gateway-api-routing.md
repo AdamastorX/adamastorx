@@ -1,6 +1,6 @@
 # 0010. Gateway → API routing: application-level forwarding, Service DNS, env-injected address
 
-Status: Accepted
+Status: Superseded by 0021
 
 ## Context
 
