@@ -1,6 +1,6 @@
 # 0011. Kafka messaging: workers module, spring-kafka, work-items topic, single-broker KRaft deployment
 
-Status: Accepted
+Status: Superseded by 0032
 
 ## Context
 
