@@ -68,13 +68,14 @@ don't override it, only an `autoMode.allow` entry in `settings.local.json` did (
 review of the Ralph loop experiment (#156) concluded adoption narrowed to a named Implement/Test
 technique with 8 mechanically-checkable preconditions, not a project working model. Status: Proposed,
 with a 2026-12-01 review date or five recorded runs, whichever comes first. PRs merged in all four
-repos: `adamastorx`#337, `services`#92, `platform`#221, `observability`#39. All `.claude/settings.json`
-files committed at project scope (plugins: `ralph-wiggum@claude-code-plugins`, `mattpocock-skills@mattpocock`),
+repos: `adamastorx`#337, `services`#92, `platform`#221, `observability`#39. `.claude/settings.json`
+files committed at project scope (correction 2026-10-03: `platform` had no `settings.json` on `main` until
+the PreToolUse guard, platform#202, and the plugin lists described here are not there) (plugins: `ralph-wiggum@claude-code-plugins`, `mattpocock-skills@mattpocock`),
 enabled in `adamastorx` and `services` only; not `platform` or `observability`. Backlog items #149/#150/#151
 AC updated per the decision. New item #158 created for `check-resource-limits.sh` repair (self-test fixtures,
-all-workload-kind glob, header corrected). Operator connectivity finding: NucBox offline 33 days (Tailscale
-node key expired post-cutover); T460s online (k3s correctly stopped); /etc/hosts wrong IP; kubeconfig missing
-from this Mac (by design, not a gap).
+all-workload-kind glob, header corrected). Operator connectivity finding (resolved by
+2026-10-03, see the pickup section above): NucBox offline 33 days, Tailscale node key expired post-cutover;
+/etc/hosts wrong IP; no kubeconfig on this Mac.
 
 **Backlog #49 (Cilium/Hubble, replacing flannel) and #50 (first
 NetworkPolicies) are both Done and live, 2026-08-10** — the day's major
