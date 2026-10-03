@@ -6,22 +6,76 @@ threads, and things the next session shouldn't have to re-discover the
 hard way. Prune/rewrite freely as work completes; this file describes
 *current* state, not history (git history is the record of the past).
 
-Last updated: 2026-10-02.
+Last updated: 2026-10-03.
 
 ## Where things stand
+
+**2026-10-03 pickup session — state of play (verified live, not recalled)**
+
+- **Cluster reachable from the Mac**: kubeconfig is `~/.kube/nucbox-config`, API at
+  `https://100.69.223.105:6443` (Tailscale node `adamastorx`, the single k3s node, Ready).
+  The `nucbox-k8-plus` Tailscale entry is stale. Nothing in `platform` sets `KUBECONFIG`
+  (per-machine path; platform#204 dropped the env entry) — export your own.
+- **`adamastorx` `main` CI was red 2026-10-02/03 and is green again.** The failing job was
+  `roster-drift`'s dashboard/SLO half (seven components past the 14-day grace period with no
+  stated reason: six `*-network-policies` batches and `vpa-objects`; `mimir` SLO only), fixed
+  by platform#222 + adamastorx#340. The "not mentioned in overview.md" lines in that log
+  came from the checker's own self-tests, which fail on purpose. Lesson: merge the `platform`
+  half first, the check reads `platform`'s `main`.
+- **Merged this session**: platform#194 (OOM recency gate, #143 AC 1 — live, only `beyla`
+  still holds the stale `137` gauge and stays silent), #196 (ClinVar dashboard + alert),
+  #202 (PreToolUse guard), #204 (SessionStart brief), #223 (egress from `prometheus-server` to
+  loki/tempo/pyroscope), #200, #203; adamastorx#327 (re-filed as #159), #330, #331, #332,
+  #333, #340, #341; observability#36–#38, #40.
+- **`ClinVarInvalidationLag` (platform#196) could never have fired as originally written**: a
+  bare `>` between two vectors with different `job` labels matches no series (checked against
+  the live Prometheus). Now `sum(...) > (sum(...) or vector(0))`.
+- **The `PreToolUse` guard (#202) no longer emits `permissionDecision: allow`** with the
+  marker present: that would skip the user's own permission prompt. With the marker it only
+  stops blocking; the normal permission flow still decides.
+
+**Still open, in priority order**
+
+1. **Postgres backups have failed every run since 2026-10-01** (all three CronJobs,
+   `DeadlineExceeded` at 600s, *no pod ever created*; last success 2026-09-09). The node and PV
+   affinity match and the pods are gone, so a read-only look can't name the cause: needs a
+   one-off Job from the CronJob (cluster mutation, ask first) or watching tonight's 03:00 run.
+   Tracked as #157, which undersold it ("after the host was powered off"): it is still failing
+   days after the host came back.
+2. **`services` CI blocks every PR on real HIGH/CRITICAL CVEs**: `aggregator`'s `app.jar` (13,
+   3 critical) and alpine `libcrypto3`/`libssl3`/`pcre2` in the nginx frontends. Renovate PRs
+   (Spring Boot 4.1.1, base-image digests, nginx v1.31.6) are the likely fix; CI was re-run
+   on them. services#83 (#156) is only waiting behind this.
+3. **platform#201 (#144) must not merge before `prometheus-network-policies` is synced** in the
+   cluster (manual-sync Application; platform#223 added the egress rules). Otherwise the three
+   new scrapes are blocked and `TelemetryBackendDown` fires immediately. Then runbooks and #201.
+4. **platform#195 (#142 securityContext)**: its own description requires an independent
+   `platform-engineer` review and per-workload live syncs gated on the owner. Several of the
+   target Applications auto-sync, so a merge alone can change live pods
+   (`readOnlyRootFilesystem` is the real regression risk). Not merged.
+5. **`beyla` scrape target is down** (`up{job="beyla"}=0`, `connection reset by peer`, 29
+   restarts, OOM `137` earlier today). The beyla-vs-manual dashboard (platform#200, #145) has
+   no data to verify against until this is fixed.
+6. #146/#147 landed (record reconciliation, status-marker check); #143 AC 2 (`promtool`)
+   untouched; the `mimir` still-fires half of #143 AC 1 not yet seen live.
+
+**Operator note**: Claude Code's auto-mode classifier intermittently blocks harmless reads
+and `gh pr merge` (reasons `Merge Without Review` / `Self-Modification`); permission rules
+don't override it, only an `autoMode.allow` entry in `settings.local.json` did (user-edited).
 
 **ADR 0046 (bounded verification loops) adopted and merged across all four repos, 2026-10-02**
 — after a ~1-month interruption (last commit 2026-08-31, the cutover), a staff-engineer (Opus)
 review of the Ralph loop experiment (#156) concluded adoption narrowed to a named Implement/Test
 technique with 8 mechanically-checkable preconditions, not a project working model. Status: Proposed,
 with a 2026-12-01 review date or five recorded runs, whichever comes first. PRs merged in all four
-repos: `adamastorx`#337, `services`#92, `platform`#221, `observability`#39. All `.claude/settings.json`
-files committed at project scope (plugins: `ralph-wiggum@claude-code-plugins`, `mattpocock-skills@mattpocock`),
+repos: `adamastorx`#337, `services`#92, `platform`#221, `observability`#39. `.claude/settings.json`
+files committed at project scope (correction 2026-10-03: `platform` had no `settings.json` on `main` until
+the PreToolUse guard, platform#202, and the plugin lists described here are not there) (plugins: `ralph-wiggum@claude-code-plugins`, `mattpocock-skills@mattpocock`),
 enabled in `adamastorx` and `services` only; not `platform` or `observability`. Backlog items #149/#150/#151
 AC updated per the decision. New item #158 created for `check-resource-limits.sh` repair (self-test fixtures,
-all-workload-kind glob, header corrected). Operator connectivity finding: NucBox offline 33 days (Tailscale
-node key expired post-cutover); T460s online (k3s correctly stopped); /etc/hosts wrong IP; kubeconfig missing
-from this Mac (by design, not a gap).
+all-workload-kind glob, header corrected). Operator connectivity finding (resolved by
+2026-10-03, see the pickup section above): NucBox offline 33 days, Tailscale node key expired post-cutover;
+/etc/hosts wrong IP; no kubeconfig on this Mac.
 
 **Backlog #49 (Cilium/Hubble, replacing flannel) and #50 (first
 NetworkPolicies) are both Done and live, 2026-08-10** — the day's major
@@ -82,7 +136,7 @@ belongs here more than duplicated into the permanent record.
   `--repo AdamastorX/platform` for whatever's actually open right now,
   since this line goes stale the moment a new PR opens.
 - `docs/roadmap/backlog.md` is the live source of truth for what's open
-  next (currently #1–#121, structural integrity enforced by
+  next (currently #1–#159, structural integrity enforced by
   `scripts/check_backlog_structure.py` and CI's `backlog-structure`
   check on every PR).
 - `.claude/PROJECT.md`'s "Current milestone" section is the stable,
