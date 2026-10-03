@@ -1,6 +1,6 @@
 # 0025. Reopen the bioinformatics-workloads milestone that ADR 0021 closed
 
-Status: Proposed
+Status: Accepted
 
 ## Context
 

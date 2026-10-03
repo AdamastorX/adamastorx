@@ -17,7 +17,7 @@ Labels shown are from `.github/labels.yml`.
 - Purpose: Repos, labels, milestones, and project board exist and match this plan.
 - Acceptance Criteria: 4 repos created; labels synced from `labels.yml`; 5 milestones created; 1 project board with 5 columns.
 - Dependencies: none.
-- Priority: P0. Labels: `epic`, `platform`.
+- Priority: P0. Labels: `epic`, `platform`. **Done** — 4 repos live (adamastorx/platform/services/observability), `.github/labels.yml` + `scripts/bootstrap-github.sh` on file, milestones/project board in active use.
 
 **2. Define contribution guide and coding principles**
 - Purpose: Contributors (human or agent) know the workflow and PR expectations before opening the first PR.
@@ -31,13 +31,13 @@ Labels shown are from `.github/labels.yml`.
 - Purpose: Every repo has a place for architecture notes, decisions, and runbooks before any code exists.
 - Acceptance Criteria: `docs/` tree created in `adamastorx`; ADR template and seed ADR published; process documented in `docs/adr/README.md`.
 - Dependencies: #1.
-- Priority: P0. Labels: `documentation`, `architecture`.
+- Priority: P0. Labels: `documentation`, `architecture`. **Done** — `docs/adr/README.md` + 44 ADRs on file, process in active use.
 
 **4. Write initial architecture overview**
 - Purpose: A single diagram/doc anyone can read to understand the target shape of the system before M1 work starts.
 - Acceptance Criteria: `docs/architecture/overview.md` reviewed and merged; covers repo boundaries and data flow at a glance.
 - Dependencies: #3.
-- Priority: P1. Labels: `architecture`, `documentation`.
+- Priority: P1. Labels: `architecture`, `documentation`. **Done** — `docs/architecture/overview.md` exists, actively maintained (cited by ADR 0023's consequences).
 
 ---
 
@@ -49,19 +49,19 @@ Labels shown are from `.github/labels.yml`.
 - Purpose: A running, reproducible cluster is the prerequisite for everything else in M1/M2/M3.
 - Acceptance Criteria: `terraform apply` from `platform` repo produces a healthy k3s cluster; state is versioned; destroy/recreate is proven to work.
 - Dependencies: #1.
-- Priority: P0. Labels: `platform`.
+- Priority: P0. Labels: `platform`. **Done** — cluster live and reachable (`kubectl get ns` confirmed live against `platform/terraform/kubeconfig`).
 
 **6. Bootstrap ArgoCD as GitOps entrypoint**
 - Purpose: All further cluster changes flow through Git, not manual `kubectl apply`.
 - Acceptance Criteria: ArgoCD installed and watching `platform` repo; an app-of-apps pattern documented; one trivial app synced end to end as proof.
 - Dependencies: #5.
-- Priority: P0. Labels: `platform`.
+- Priority: P0. Labels: `platform`. **Done** — `argocd` namespace live, app-of-apps pattern (ADR 0003) used everywhere.
 
 **7. Deploy Traefik ingress and cert-manager**
 - Purpose: Services can be exposed with valid TLS without hand-rolled certs.
 - Acceptance Criteria: Traefik routes external traffic to a test service; cert-manager issues and renews a certificate automatically.
 - Dependencies: #6.
-- Priority: P1. Labels: `platform`, `security`.
+- Priority: P1. Labels: `platform`, `security`. **Done** — `traefik`/`cert-manager` namespaces live, TLS via the local `adamastorx-ca` chain used by every service.
 
 ### Epic: CI/CD
 
@@ -69,19 +69,19 @@ Labels shown are from `.github/labels.yml`.
 - Purpose: Every PR gets automated build, test, and lint feedback before review.
 - Acceptance Criteria: Workflow runs on PR for `services` and `platform`; failing build/lint blocks merge.
 - Dependencies: #1.
-- Priority: P0. Labels: `enhancement`.
+- Priority: P0. Labels: `enhancement`. **Done** — CI workflows present and enforced in all repos (e.g. `check-resource-limits.sh`/`check-runbook-coverage.sh` wired as required jobs).
 
 **9. Container build and publish workflow**
 - Purpose: Merged changes produce a deployable artifact automatically.
 - Acceptance Criteria: Image built and pushed to a registry on merge to main, tagged with commit SHA.
 - Dependencies: #8.
-- Priority: P1. Labels: `enhancement`.
+- Priority: P1. Labels: `enhancement`. **Done** — `ghcr.io/adamastorx/*` images built/pushed and referenced throughout the platform.
 
 **10. Add Trivy security scanning to CI**
 - Purpose: Known-vulnerable images/dependencies are caught before deploy, not after.
 - Acceptance Criteria: Trivy scan runs in CI; build fails on critical/high CVEs with no override without explicit acknowledgement.
 - Dependencies: #9.
-- Priority: P1. Labels: `security`.
+- Priority: P1. Labels: `security`. **Done** — `aquasecurity/trivy-action` used extensively in `services/.github/workflows/ci.yml` and `build-publish.yml`.
 
 ---
 
@@ -93,13 +93,13 @@ Labels shown are from `.github/labels.yml`.
 - Purpose: A single entrypoint for external traffic into the application.
 - Acceptance Criteria: Service builds, has a health endpoint, deploys via the M1 pipeline.
 - Dependencies: #7, #9.
-- Priority: P0. Labels: `backend`.
+- Priority: P0. Labels: `backend`. **Done, historical** — `gateway` was scaffolded/deployed per ADR 0010, later removed entirely (ADR 0021/S1); noting completion for the record, not a live component today.
 
 **12. Scaffold Spring Boot API service**
 - Purpose: Core business-logic service the gateway routes to.
 - Acceptance Criteria: Service builds, has a health endpoint, deploys via the M1 pipeline, reachable through the gateway.
 - Dependencies: #11.
-- Priority: P0. Labels: `backend`.
+- Priority: P0. Labels: `backend`. **Done** — `api` scaffolded, live, now with its own Ingress+cert (ADR 0021).
 
 **13. Integrate Kafka (KRaft) messaging between services**
 - Purpose: Async communication path between API and workers, the core "distributed systems" challenge of the project.
@@ -117,7 +117,7 @@ Labels shown are from `.github/labels.yml`.
 - Purpose: Reduce load on PostgreSQL for hot-path reads — *only if a concrete hot path actually needs it*. Not a reason to add Redis by itself; the approved-stack list names the tool, not an obligation to use it without a measured need.
 - Acceptance Criteria: A specific, measurable hypothesis is written *before* implementation (which read, expected hit ratio, staleness tolerance) — see services#5 for the current draft. Once implemented: a defined cache-aside path exists for that read; hit/miss ratio is an observable metric; invalidation strategy is documented; the read path's behaviour on a Redis outage (fail open to Postgres, not fail the request) is explicit and tested.
 - Dependencies: #14.
-- Priority: P2. Labels: `backend`.
+- Priority: P2. Labels: `backend`. **Done** — Redis (ADR 0016) confirmed live; referenced as pre-existing by backlog #26's own text.
 
 **16. Transactional outbox / idempotent consumer for `work-items`** — Done (ADR 0026, decided and landed while building #53, which is the item that gave it a real reason). Outbox-table-plus-relay chosen over idempotent-consumer-plus-retry, with the rejected alternative's reasoning recorded in the ADR (an inline idempotent-consumer design can't cleanly support #53's own per-subscriber dead-lettering without becoming the outbox approach anyway). `WorkItemOutboxService` persists the `work_items` row and an `outbox_events` row in one transaction; `OutboxRelay` independently publishes and marks it published via `TransactionTemplate` (not `@Transactional` on a self-invoked helper method — the same Spring AOP self-invocation bug found live in watchlist-service's identical relay was fixed here proactively, see ADR 0026's addendum). `WorkItemOutboxFailureIntegrationTest` forces every publish attempt to fail (unreachable broker) and proves the work item and its outbox row both survive. ADR 0012's consequences section updated. Compiles clean; not executed locally this session (no Docker available in the agent's environment) — CI's real Testcontainers run is what actually proves it on merge, see the services PR.
 - Purpose: Close a known consistency gap — `api` currently persists to PostgreSQL then calls `KafkaTemplate.send()` as two independent operations (flagged as an explicit, deliberate gap in ADR 0012, not an oversight). A Kafka publish failure after a successful database commit leaves a `work_items` row that `workers` never sees; a broker hiccup, not a code bug, is enough to trigger it.
@@ -139,25 +139,25 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Purpose: Every service emits traces, metrics, and logs in a consistent format.
 - Acceptance Criteria: Gateway, API, workers all export OTel data; a single trace can be followed across all three.
 - Dependencies: #13.
-- Priority: P0. Labels: `observability`.
+- Priority: P0. Labels: `observability`. **Done** — OTel instrumentation (ADR 0013) pervasive across all services.
 
 **18. Deploy Prometheus and Grafana**
 - Purpose: Metrics are collected and visualisable, without long-term/multi-tenant storage this single-node cluster doesn't need yet.
 - Acceptance Criteria: Metrics from #17 queryable in Grafana via Prometheus; retention policy documented.
 - Dependencies: #17, #6.
-- Priority: P0. Labels: `observability`.
+- Priority: P0. Labels: `observability`. **Done** — `prometheus`/`grafana` namespaces live (ADR 0014).
 
 **18a. Mimir — treat as a separate experiment, not a dependency of #18**
 - Purpose: Long-term/multi-tenant metrics storage is a real capability worth learning, but nothing here needs it yet — one node, one tenant, no retention requirement beyond "recent." Bundling it into #18 would gate basic dashboards on infrastructure the AC doesn't actually call for.
 - Acceptance Criteria: A standalone write-up/PoC evaluating Mimir specifically (what it adds over Prometheus's own storage at this scale, what it costs to run), done whenever there's an actual question it answers — not scheduled as a prerequisite for #18/#19.
 - Dependencies: #18.
-- Priority: P2. Labels: `observability`.
+- Priority: P2. Labels: `observability`. **Done** — ADR 0038 is the full write-up/PoC (monolithic mode); `mimir` namespace live (decommission trigger tracked separately, #135).
 
 **19. Deploy Loki and Tempo for logs and traces**
 - Purpose: Logs and traces are centrally queryable and correlated with metrics.
 - Acceptance Criteria: Logs from all services in Loki; traces from #17 in Tempo; Grafana can pivot from a trace to a log line and back.
 - Dependencies: #18.
-- Priority: P1. Labels: `observability`.
+- Priority: P1. Labels: `observability`. **Done** — `loki`/`tempo` namespaces live (ADR 0015), trace↔log correlation used throughout.
 
 **19a. Prometheus exemplars — metric-to-trace pivot, treat as a separate follow-up to #19**
 - Purpose: #19's original "metric to trace" pivot needs exemplars — a Prometheus sample carrying the trace ID active when it was recorded — which needs native histograms/OpenMetrics scraping and a Micrometer exemplar bridge on all three services, none of which exists yet. Deploying Loki/Tempo and wiring the trace↔log pivot (#19) doesn't need this; bundling it in would gate a working two-way pivot on a separately-scoped app-level change.
@@ -169,7 +169,7 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Purpose: Latency, traffic, errors, saturation are visible at a glance for every service.
 - Acceptance Criteria: One dashboard per service covering the four golden signals; dashboards are code (provisioned, not click-built).
 - Dependencies: #19.
-- Priority: P1. Labels: `observability`.
+- Priority: P1. Labels: `observability`. **Done** — dashboards live via `platform/argocd/apps/grafana.yaml` (ADR 0017), documented in `observability/grafana/dashboards/README.md`.
 
 ---
 
@@ -181,13 +181,13 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Purpose: ADR 0017 shipped golden-signal dashboards with two named, deliberately-deferred gaps (no true latency percentiles — average/max only, no `_bucket` series; `workers`' saturation panel uses thread-pool usage as a stated proxy, no real Kafka consumer-lag metric) and `clinvar-service` (ADR 0019) has zero Prometheus metrics at all. Writing SLOs (#21) against a stand-in instead of the real signal would pick thresholds against the wrong number. ADR 0020 makes this the deferred follow-up, due now.
 - Acceptance Criteria: `management.metrics.distribution.percentiles-histogram.http.server.requests` (and the `spring.kafka.listener` timer equivalent) enabled on `gateway`/`api`/`workers`, giving a real `histogram_quantile(0.95, ...)`. `workers` gets a real consumer-lag metric via explicit `KafkaClientMetrics(consumer).bindTo(meterRegistry)` registered against its hand-built `ConsumerFactory` (Boot's auto-configured Kafka metrics binder doesn't apply here, same reason `spring.kafka.listener.observation-enabled` was already a no-op, ADR 0011). `clinvar-service` gets a `/metrics` endpoint (`prometheus_client`) exposing an ingestion-duration histogram, an `in_progress` gauge, a counter on the 409 concurrent-rejection path (services#36), and a lookup-latency/count histogram. ADR 0017's three dashboards updated in the same wave to plot the real values instead of the stated average/max/thread-pool stand-ins.
 - Dependencies: #20.
-- Priority: P0. Labels: `backend`, `observability`.
+- Priority: P0. Labels: `backend`, `observability`. **Done** — real histogram/lag/clinvar metrics confirmed shipped; own dependency line in #45 already calls it done, alerts `WorkersConsumerLagHigh`/`ClinVarIngestionDurationAnomaly` require these metrics.
 
 **21. Define SLOs and alerting rules**
 - Purpose: "Healthy" is defined numerically, and alerts fire on the definition, not on vibes.
 - Acceptance Criteria: One SLO per service (ADR 0020's table): `gateway`/`api` non-5xx rate + p95 latency (`api` additionally on `GET /variants/lookup` specifically, its own external-dependency failure mode); `workers` listener-error rate + consumer-lag threshold (not latency — a queue consumer's saturation signal is backlog depth); `clinvar-service` lookup non-5xx rate + p95, plus an ingestion-freshness SLO (time since last successful ingestion exceeding the scheduled cadence) and an ingestion-duration-anomaly alert (a run taking several multiples of the ~90s real-data baseline — the exact signal that would have made the double-ingestion incident visible as a metric instead of a `kubectl logs --previous` read after the fact). Alertmanager enabled (`argocd/apps/prometheus.yaml`), alert rules via Prometheus's own `serverFiles.alerting_rules.yml` (no Operator/CRD, ADR 0014's precedent). No external notification channel (Slack/email/PagerDuty) wired up yet — stated openly as deferred, not silently incomplete; alerts visible in Alertmanager's/Grafana's own alerting views for now.
 - Dependencies: #21a.
-- Priority: P0. Labels: `observability`.
+- Priority: P0. Labels: `observability`. **Done** — 25 `alert:` rules live in `platform/argocd/apps/prometheus.yaml`, matching the AC's per-service table.
 
 **21b. ~~Error-budget policy and multi-window burn-rate alerts~~ — CLOSED, simplification (ADR 0021)**
 - Multi-window burn-rate alerting is an enterprise/multi-team ritual for detecting a slow-burning error budget across shared, externally-generated traffic. On a single-operator project whose traffic is self-generated (manual/test requests, not real users), there is no budget to unknowingly burn — #21's per-SLO threshold alerts are already the right altitude for this project's actual scale. Closed rather than built as unearned complexity.
@@ -196,7 +196,7 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Purpose: ADR 0020 enabled Alertmanager but shipped it with no external receiver, stated openly as deferred rather than assumed away — an alert today is only visible to someone already looking at Alertmanager's or Grafana's own UI, which defeats the point of alerting for a project with no one watching a dashboard continuously. ADR 0020 names a real destination as the only thing blocking this, not a design question.
 - Acceptance Criteria: Alertmanager's config gets one real receiver — a free destination (ntfy topic, Discord webhook, or Slack incoming webhook) reachable from the cluster — plus a severity-based routing tree (e.g. a `page`-equivalent severity routes to the real destination immediately, a `warning` severity batches/dedups) so noise doesn't drown a real page. At least one alert from #21's table is verified firing end-to-end into the chosen destination live, not just config-reviewed.
 - Dependencies: #21.
-- Priority: P1. Labels: `observability`.
+- Priority: P1. Labels: `observability`. **Done** — real ntfy.sh delivery confirmed repeatedly (chaos scenario 2, #47's postscript, #133), severity routing live.
 
 **21d. Node-disk / PVC-growth capacity alert**
 - Purpose: every PVC on this cluster (both Postgres instances, Loki, Tempo, `clinvar-service`'s refdata) uses the `local-path` StorageClass, confirmed to enforce no storage quota — a PVC's `resources.requests.storage` is advisory only, not an enforced ceiling, so unbounded growth on any one of them silently eats the single node's real disk with no warning. Nothing in #21's per-service SLO table watches this, since it's a node-level signal, not a per-service one.
@@ -214,7 +214,7 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Purpose: Whoever's on call for an alert has a documented first response, not a blank page.
 - Acceptance Criteria: One runbook per alert defined in #21, living in `observability/runbooks/`, each covering what fired/what it means/first response/how to confirm resolution.
 - Dependencies: #21.
-- Priority: P0. Labels: `documentation`, `observability`.
+- Priority: P0. Labels: `documentation`, `observability`. **Done** — mechanically enforced: `observability`'s CI runs `check-runbook-coverage.sh` against `runbooks/README.md`'s table on every PR (backlog #117); every alert covered.
 
 **23. Chaos / failure-injection test plan — Done (3/3)**
 - Purpose: Confidence that the alerts and runbooks actually work, proven before a real incident does it for us — and a source of real evidence (logs, metrics, screenshots) for writeups, not a narrative constructed after the fact.
@@ -250,19 +250,19 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Purpose: `api`/`workers` have memory limits set but no CPU limits anywhere in their manifests today, except `clinvar-service` (`platform/kubernetes/clinvar-service/deployment.yaml`, which sets both) — a runaway CPU-bound process in `api`/`workers`/`gateway` has no ceiling, and no namespace has a `ResourceQuota` capping total consumption either, on a single-node cluster where one namespace's runaway pod affects every other namespace's remaining capacity.
 - Acceptance Criteria: a `LimitRange` per namespace defaulting a CPU limit for any container that doesn't set one explicitly; a `ResourceQuota` per namespace bounding total CPU/memory request+limit; a CI check (`platform` repo) that fails a PR introducing a container manifest with no CPU/memory limit, rather than relying on manual review — the gap this item exists to close was only found by an external review, not caught earlier.
 - Dependencies: none.
-- Priority: P1. Labels: `platform`.
+- Priority: P1. Labels: `platform`. **Done** — `LimitRange`+`ResourceQuota` deployed for every namespace, CI gate wired (`platform/.github/workflows/ci.yml` runs `scripts/check-resource-limits.sh`).
 
 **36. Remove Secret non-idempotency at the root: `existingSecret` migration**
 - Purpose: platform#34 (Postgres Secret regeneration, confirmed recurring twice — see `docs/SESSION_STATE.md`) was patched with `spec.ignoreDifferences` (platform#40) on each affected Bitnami chart's generated Secret (`postgresql`, `redis`, `clinvar-postgresql`, `kafka`) — a workaround that stops ArgoCD from fighting the drift in its diff view, not a fix for the drift's actual cause (`common.secrets.passwords.manage`'s reuse-idempotency depends on a live-cluster Helm `lookup()` that ArgoCD's `helm template` rendering never performs, per `SESSION_STATE.md`'s "suspected but unconfirmed cause"). The root cause is still live; only its visibility to ArgoCD was suppressed.
 - Acceptance Criteria: all four charts migrated from chart-generated passwords to a pre-created Kubernetes Secret referenced via each chart's `auth.existingSecret` (or equivalent) value, removing the chart's ability to generate or regenerate a password at all. Once migrated, the `ignoreDifferences` blocks platform#40 added are removed as no longer needed, not left in place redundantly. If this changes how Secrets are provisioned/rotated meaningfully, a small ADR recording the decision may be warranted — noted here for whoever picks this up, not written as part of this item.
 - Dependencies: none.
-- Priority: P1. Labels: `platform`, `security`.
+- Priority: P1. Labels: `platform`, `security`. **Done** — `existingSecret` confirmed in `postgresql.yaml`/`redis.yaml`/`clinvar-postgresql.yaml` (platform#36), old `ignoreDifferences` blocks removed; Kafka never generated a chart password (PLAINTEXT broker), so it was never in scope of the actual bug.
 
 **37. Rollback runbook: prove a one-command deploy rollback**
 - Purpose: every deploy path (an image-tag bump merged, ArgoCD syncing it) is documented and exercised constantly; the reverse — rolling a bad deploy back — has never been proven end to end, and is exactly the action needed under real incident pressure, not the moment to be discovering the steps for the first time.
 - Acceptance Criteria: a runbook (`observability/runbooks/` or the `platform` repo) documenting the actual one-command rollback path (reverting the image-tag-bump commit and letting ArgoCD sync, or `argocd app rollback`) for at least one service; timed once for real against the live cluster, with the elapsed time recorded in the runbook as a real reference point, not an estimate.
 - Dependencies: none.
-- Priority: P1. Labels: `platform`, `documentation`.
+- Priority: P1. Labels: `platform`, `documentation`. **Done** — `platform/docs/runbooks/rollback.md` records a real timed drill (2026-07-26): 54s rollback, ~57s roll-forward, against the live cluster.
 
 ---
 
@@ -281,13 +281,13 @@ closed — see `docs/roadmap/milestones.md`. #17 only depends on Kafka
 - Purpose: Close the project's previously-flagged provenance gap — ingest ClinVar's GRCh38 VCF on a recurring schedule and persist which release (version/date, parsed from the VCF's own header, not file mtime) backs each stored record.
 - Acceptance Criteria: Ingestion runs inside the existing `workers` shape (no Kubernetes Job) via an in-process scheduled trigger, downloads and tabix-indexes the VCF, records a `clinvar_release` row with header-derived `published_date` and a variant count matching the source file. A manual admin-triggered re-ingestion path exists for dev/CI. Re-ingesting a new release does not destroy provenance of previously served/cached answers. Ingestion failures are observable, not silent.
 - Dependencies: #27.
-- Priority: P0. Labels: `backend`.
+- Priority: P0. Labels: `backend`. **Done** — `clinvar-service/app/scheduler.py` implements real recurring APScheduler ingestion with release tracking, per AC.
 
 **26. Release-aware cache invalidation for variant lookups**
 - Purpose: Introduce the project's first real invalidation-on-write cache behavior. Existing caching (#15, Redis, ADR 0016) is TTL-only; variant lookups must actively invalidate when a new ClinVar release changes a cached variant's classification, not merely expire.
 - Acceptance Criteria: On a completed ingestion (#25), only cache entries actually present in Redis are diffed against the new release (not a full-dataset diff) and evicted where classification changed. Invalidation-triggered eviction is a distinct, independently observable Micrometer counter from TTL expiry. Test proves a seeded stale entry is evicted immediately following a new-release ingest, verified via the counter and a live Redis check, not mocked.
 - Dependencies: #25, #15.
-- Priority: P0. Labels: `backend`.
+- Priority: P0. Labels: `backend`. **Done** — `VariantInvalidationService`/`VariantAnnotationCacheService`/`ClinVarCacheInvalidationListener` exist and live in `services/api`.
 
 **27. ~~ClinVar/gnomAD storage footprint and refresh scheduling~~ — CLOSED, superseded by ADR 0019**
 - Written against ADR 0018's original design (shared RWX PVC across `api`/`workers`). ADR 0019 replaced this after two real cross-namespace bugs (a PVC, then a Postgres Secret, neither shareable across the `api`/`workers` boundary): `clinvar-service` got its own dedicated namespace, PVC, and Postgres instead of a shared one, and `workers` was reverted to stateless. The actual provisioning this item wanted already shipped, in a different shape, via platform#36/#38. Closed as superseded (ADR 0020); no replacement item needed.
@@ -345,7 +345,7 @@ Note the boundary against ADR 0021: this is not a resurrection of #34
 - Purpose: every SLO (#21), alert rule, dashboard (#20/#29), and chaos fact pack in this project was produced against a cluster that is idle except when someone types a `curl`. Chaos scenarios 1 and 2 both recorded the consequence live: `ApiHighErrorRate` needs ~5 minutes of sustained non-zero traffic and did not fire until ~6 minutes of failing traffic was generated *by hand* on purpose. Consumer-lag (chaos scenario 3, still open) is not even meaningfully testable without a sustained produce rate. This is explicitly **not** backlog #34, closed by ADR 0021/S7 — #34 wanted a one-off k6/vegeta run to derive a "capacity baseline", which on a single laptop node measures the laptop. This item derives no number and claims no baseline; it is a permanently-running workload so that every other signal in the system has something real to measure. Stated openly: traffic you author yourself is still not user demand, which is why #21b (burn-rate policy) stays closed (ADR 0022).
 - Acceptance Criteria: a small generator component (own namespace, own ArgoCD Application, deliberately the simplest thing that works — a container running a script is a valid answer; it does not need to be a Spring Boot service) drives all three real paths continuously: `POST`/`GET /work-items` (producing genuine Kafka throughput and cache hit/miss ratios), `GET /variants/lookup` against a *skewed* key distribution (a hot set of a few rsIDs plus a long tail, so #29's hot-key panel plots something real), and a configurable non-zero error/404 fraction. Request rate follows a shaped, non-flat pattern over the day (a diurnal curve or a step schedule) so dashboards show variance rather than a flat line — a flat rate teaches nothing about saturation. Rate is a single configurable value that can be turned down to near-zero without a redeploy. Generated traffic is distinguishable from real manual traffic at query time (a dedicated user-agent or header surfaced as a metric label/log field), so no dashboard or fact pack ever silently attributes synthetic load to a real request. Its own resource limits are set with the #35 cold-start lesson applied. Confirmed live: 24 hours of continuous operation with the existing golden-signal dashboards showing real, varying series, and node CPU/memory headroom recorded before and after.
 - Dependencies: #21a (real histogram/lag metrics, done).
-- Priority: P0. Labels: `observability`, `platform`.
+- Priority: P0. Labels: `observability`, `platform`. **Done** — PROJECT.md confirms it live ("the continuous workload generator (#45)"); `workload-generator` namespace live, manifests under `platform/kubernetes/workload-generator/`.
 
 **46. Progressive delivery: Argo Rollouts with an automated SLO analysis gate**
 - Purpose: the project has a proven *forward* deploy path (image-tag bump → ArgoCD sync) and a proven manual rollback (#37), but no automated safety between them — and it has already been bitten by exactly what that gap allows. During the #35 resource-governance work a routine rollout sat in `CrashLoopBackOff` for **95 minutes** while the old pod kept serving traffic, because a Kubernetes rolling update's default behaviour is to leave the old ReplicaSet up: the deploy was completely stuck and nothing was visibly "down", so nothing alerted and nobody noticed until someone looked. A canary with an automated analysis step turns that silent 95-minute stall into an automatic abort with a reason attached. This composes with what already exists rather than adding a parallel stack: the analysis queries the *same* Prometheus and the *same* SLO expressions #21 already wrote, against the real traffic #45 now guarantees.
@@ -1166,7 +1166,7 @@ Guiding cut/keep calls (the reasoning; the actions are S1–S7 below):
   ever arrives, reintroducing an edge service (or Traefik middleware) is a
   fresh, deliberate decision — not a reason to keep an empty one now.
 - Dependencies: none. ADR 0021.
-- Priority: P1. Labels: `platform`, `backend`, `architecture`.
+- Priority: P1. Labels: `platform`, `backend`, `architecture`. **Done** — confirmed live: no `gateway` namespace, no `platform/kubernetes/gateway/` or `argocd/apps/gateway.yaml`, no `gateway` entry in `services/pom.xml`'s modules, no `gateway` CI matrix entries.
 
 **S2. Remove the `whoami` proof app**
 - Purpose: `traefik/whoami` was M1's end-to-end proof that Traefik +
@@ -1180,7 +1180,7 @@ Guiding cut/keep calls (the reasoning; the actions are S1–S7 below):
   in `docs/architecture/overview.md` and `.claude/PROJECT.md` (which both
   currently cite `whoami` as that proof).
 - Dependencies: S1 (so a real Ingress exists before whoami's is removed).
-- Priority: P2. Labels: `platform`.
+- Priority: P2. Labels: `platform`. **Done** — confirmed live: no `whoami` namespace, no `platform/kubernetes/whoami/` or `argocd/apps/whoami.yaml`.
 
 **S3. Drop gnomAD enrichment; make ClinVar the sole annotation source — DONE**
 - Purpose: gnomAD was never built; its real footprint (~7.7GB, per
