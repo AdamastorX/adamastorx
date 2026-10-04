@@ -34,6 +34,40 @@ Last updated: 2026-10-03.
   marker present: that would skip the user's own permission prompt. With the marker it only
   stops blocking; the normal permission flow still decides.
 
+**2026-10-04 follow-up — what was fixed, and the gremlins it exposed (all verified live)**
+
+- **The node is on Wi-Fi with a DHCP address** (`wlx0cef15d0626a`, now `192.168.1.7`, was `192.168.1.10`).
+  This explains the flaky reachability from the Mac (jitter 5-110 ms, `no route to host`,
+  Tailscale picking a link-local path). Prefer an SSH tunnel to the node over the Tailscale or LAN
+  IP when `kubectl` times out: `ssh -f -N -o ServerAliveInterval=5 -L 16443:127.0.0.1:6443 <node>` then
+  `kubectl --server=https://127.0.0.1:16443` (the k3s cert accepts 127.0.0.1). The tunnel itself drops; re-open it.
+- **`cilium`'s `k8sServiceHost` was a stale DHCP IP** (`192.168.1.10`). The running agent survived on an
+  already-open API connection; the first restart (the memory-limit change) sent it to
+  `Init:CrashLoopBackOff` for ~40 min. Now `127.0.0.1` (agent and operator are `hostNetwork`). Existing pods keep
+  networking while the agent is down; new pods and policy changes do not. platform#228.
+- **The `cilium` Application is manual-sync.** Merging a change to it does nothing live. Sync only the resource
+  you changed (`operation.sync.resources` for the DaemonSet / operator Deployment); a full sync also rotates the
+  Hubble mTLS certs (the standing benign `OutOfSync`). `kafka`, `prometheus` and most others auto-sync;
+  `prometheus-network-policies`, `cilium` and the M13 Applications do not.
+- **Container memory limits were sized for the old host and the node has ~60GB RAM, ~39GB free, swap unused.**
+  The kernel (`journalctl -k`, no sudo needed) was memcg-OOM-killing `beyla` (1Gi, five times in 12h),
+  `cilium-agent` (600Mi, working set peaked 599Mi) and `kafka-controller-0` (2560Mi, working set 96-99%).
+  Raised: beyla 2Gi (platform#224), cilium-agent 1Gi (#225), kafka 4096Mi (#227).
+- **Kafka's heap is a percentage of the limit** (`controller.heapOpts`, default 75/75), so raising the limit alone
+  keeps the same proportion. Now 50/50: 2Gi heap in 4Gi, working set ~1Gi afterwards.
+- **A stuck `Terminating` pod with a zombie process** (`Zsl`, one thread in `D`) held `beyla` for ~35 min after a
+  rollout; it cleared on its own. `kubectl delete --force` is the usual remedy if it does not.
+- **Mistake to avoid**: platform#223 duplicated egress rules that platform#201 already carried in the same file
+  (written without reading the PR's own diff, and checked `origin/main` instead of the PR). The policy ended up with
+  27 rules instead of 24 and the Application OutOfSync. Fixed by platform#226 (file restored to the synced revision).
+  Read a PR's whole diff before writing a "this is missing" companion change.
+- **Postgres backups**: the 03:00 runs of 2026-10-04 succeeded for all three databases, the first since 2026-09-09.
+  The failures of 10-01..10-03 coincided with the node's recovery; backlog #157's wording ("after the host was
+  powered off") is probably right but the root cause was never confirmed.
+- **Still not done**: platform#195 (securityContext on 11 workloads; 6 Applications auto-sync, so a merge restarts
+  them). Not merged: the auto-mode classifier blocked it and it needs a human go-ahead. `ClinVarIngestionFreshnessBreach`
+  is firing (no successful ClinVar ingestion in 8 days; there is no ingestion CronJob, only backups).
+
 **Still open, in priority order**
 
 1. **Postgres backups have failed every run since 2026-10-01** (all three CronJobs,
