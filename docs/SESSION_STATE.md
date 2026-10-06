@@ -53,8 +53,10 @@ Last updated: 2026-10-03.
   The kernel (`journalctl -k`, no sudo needed) was memcg-OOM-killing `beyla` (1Gi, five times in 12h),
   `cilium-agent` (600Mi, working set peaked 599Mi) and `kafka-controller-0` (2560Mi, working set 96-99%).
   Raised: beyla 2Gi (platform#224), cilium-agent 1Gi (#225), kafka 4096Mi (#227).
-- **Kafka's heap is a percentage of the limit** (`controller.heapOpts`, default 75/75), so raising the limit alone
-  keeps the same proportion. Now 50/50: 2Gi heap in 4Gi, working set ~1Gi afterwards.
+- **Kafka's heap percentages are of the HOST's RAM, not of the limit** (corrected 2026-10-06; this bullet said
+  the opposite on 10-04). `jcmd` showed the broker JVM with `MaxRAM` = 60GB (the host) and a 29.3GiB max heap in a
+  4096Mi cgroup, so `InitialRAMPercentage/MaxRAMPercentage` bounded nothing; it now uses `-Xms1g -Xmx2g` (backlog #161).
+  The other Java services respect their limits.
 - **A stuck `Terminating` pod with a zombie process** (`Zsl`, one thread in `D`) held `beyla` for ~35 min after a
   rollout; it cleared on its own. `kubectl delete --force` is the usual remedy if it does not.
 - **Mistake to avoid**: platform#223 duplicated egress rules that platform#201 already carried in the same file
@@ -64,9 +66,37 @@ Last updated: 2026-10-03.
 - **Postgres backups**: the 03:00 runs of 2026-10-04 succeeded for all three databases, the first since 2026-09-09.
   The failures of 10-01..10-03 coincided with the node's recovery; backlog #157's wording ("after the host was
   powered off") is probably right but the root cause was never confirmed.
-- **Still not done**: platform#195 (securityContext on 11 workloads; 6 Applications auto-sync, so a merge restarts
-  them). Not merged: the auto-mode classifier blocked it and it needs a human go-ahead. `ClinVarIngestionFreshnessBreach`
-  is firing (no successful ClinVar ingestion in 8 days; there is no ingestion CronJob, only backups).
+- **Done since**: platform#195 (securityContext on 11 workloads) was merged by the owner and rolled out and verified live on
+  2026-10-04 (backlog #142); it exposed one real defect, fixed in platform#229 (api init container needs a numeric uid).
+  `ClinVarIngestionFreshnessBreach` is explained by backlog #160 (ingestion is scheduled inside clinvar-service, Monday 03:00).
+
+**2026-10-06 follow-up — measured, and what to know before touching these again**
+
+- **Read a JVM's real sizes, do not infer them from flags.** The Kafka image is a JRE with no `jcmd`; use an ephemeral
+  container with the broker's uid: `kubectl debug -n kafka kafka-controller-0 --target=kafka --image=eclipse-temurin:25-jdk
+  --custom=<json with runAsUser/runAsGroup 1001, drop ALL> -- jcmd 1 VM.flags` (and `VM.native_memory summary`, NMT is on).
+  It adds an ephemeral container that disappears with the pod. Never `kubectl exec` `kafka-topics.sh` in the broker pod:
+  a second JVM in the same cgroup with the same flags.
+- **The node's Wi-Fi drops the lease.** 2026-10-06 05:55Z: `BEACON-LOSS`, `Lost carrier`, `DHCP lease lost`, k3s
+  `node IP not found in the host's network interfaces`, and `argo-rollouts`/`keda-operator` restart together
+  (the same shape as 2026-10-04 04:23Z). Backlog #162 (needs a cable or a router reservation).
+- **The Kafka provisioning hook was broken since #126.** The `kafka` CiliumNetworkPolicy selected
+  `app.kubernetes.io/name: kafka`, which the chart's provisioning Job pod also has, so it got the broker's DNS-only egress
+  (`EGRESS DENIED` in `hubble observe --namespace kafka --verdict DROPPED`) and the `post-upgrade` hook held the `kafka`
+  sync open. Only visible on the first `kafka` sync after #126. Now selects `component: controller-eligible` (platform#233).
+  If a `kafka` sync sits at "waiting for completion of hook batch/Job/kafka-provisioning", look at Hubble first.
+- **ClinVar's weekly ingestion failed on 2026-10-05**: the completion event's `changedKeys` outgrew one Kafka message
+  (`MSG_SIZE_TOO_LARGE`) after a six-week gap. Fix is services#94 (split across events), not deployed yet; backlog #160.
+- **The image-scan gate keeps moving.** A new CRITICAL `spring-webmvc` (7.0.8, fixed 7.0.9) failed an unrelated PR two
+  days after services#93 cleared the previous ones; overrides for Tomcat, Jackson, Netty and now spring-framework live in
+  the parent pom with the CVEs named. Expect more until the Boot BOM catches up.
+- **`prometheus_remote_storage_samples_dropped_total` is not a symptom here**: ~51 samples/min are dropped on purpose by
+  `write_relabel_configs` (`otelcol_.*`). I misread it once as loss from a Mimir restart.
+- **Mimir stays** (owner decision 2026-10-06, backlog #135); resized to 1536Mi limit / 768Mi request and its namespace
+  `ResourceQuota` raised with it (the old quota would have rejected the new pod). The decommission trigger #135 asks for
+  is still unset.
+- **A `ResourceQuota` can veto a limit change.** Every app namespace has one sized for the rolling-update peak
+  (`maxSurge=1` doubles the pod); check `kubectl get resourcequota -n <ns>` before raising a request or limit.
 
 **Still open, in priority order**
 
