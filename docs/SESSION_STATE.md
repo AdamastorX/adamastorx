@@ -92,6 +92,15 @@ Last updated: 2026-10-03.
   the parent pom with the CVEs named. Expect more until the Boot BOM catches up.
 - **`prometheus_remote_storage_samples_dropped_total` is not a symptom here**: ~51 samples/min are dropped on purpose by
   `write_relabel_configs` (`otelcol_.*`). I misread it once as loss from a Mimir restart.
+- **Tempo OOM crash loop (2026-10-06 22:57Z -> fixed 2026-10-07 01:11Z)**: nine kernel memcg kills at ~783MB right after
+  "completing block" (WAL replay, then block flush; each restart replays the same WAL), limit 768Mi vs ~150-250Mi steady. Started
+  minutes after the ClinVar ingestion I triggered (712 spans/min vs ~140 baseline). Raised to 1536Mi (platform#235). **A
+  StatefulSet will not roll a pod that never becomes Ready**: the STS had the new limit but the pod kept the old one until
+  `kubectl delete pod tempo-0` (data is on the PVC). `TelemetryBackendDown` (backlog #144) fired for the tempo target
+  during this: its first real positive.
+- **ClinVar ingestion is fixed and verified live** (backlog #160): manual run `succeeded` in 1m52s, 40,063 changed keys
+  published as 3 events, `api` evicted exactly 40,063. To run one: `POST /internal/clinvar/ingest` inside the pod, poll
+  `GET /internal/clinvar/ingest/{id}`. Expect a burst of spans (Tempo, above).
 - **Mimir stays** (owner decision 2026-10-06, backlog #135); resized to 1536Mi limit / 768Mi request and its namespace
   `ResourceQuota` raised with it (the old quota would have rejected the new pod). The decommission trigger #135 asks for
   is still unset.
