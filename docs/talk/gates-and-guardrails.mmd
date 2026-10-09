@@ -1,0 +1,81 @@
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'Helvetica, Arial, sans-serif', 'fontSize': '19px', 'lineColor': '#475569', 'primaryTextColor': '#0f172a'}, 'flowchart': {'curve': 'basis', 'nodeSpacing': 22, 'rankSpacing': 46, 'htmlLabels': true, 'padding': 14}}}%%
+flowchart LR
+
+  subgraph A["Before code"]
+    direction TB
+    A1["Definition of Ready<br/>acceptance criteria written"]
+    A2["ADR for design calls<br/>written by the architect"]
+    A3["Least-privilege personas<br/>architect has no Edit or Bash"]
+    A1 ~~~ A2 ~~~ A3
+  end
+
+  subgraph B["In the session"]
+    direction TB
+    B1["PreToolUse hook<br/>blocks kubectl / terraform<br/>mutations without a token"]
+    B2["Permission rules and the<br/>auto-mode classifier"]
+    B3["Bounded loops<br/>8 preconditions<br/>no KUBECONFIG in a loop"]
+    B1 ~~~ B2 ~~~ B3
+  end
+
+  subgraph C["In the PR  (required CI)"]
+    direction TB
+    C1["platform: terraform · kubeconform<br/>helm render · shellcheck<br/>resource limits"]
+    C2["services: tests · Trivy CVE scan<br/>per image · event schemas"]
+    C3["adamastorx: backlog structure<br/>docs vs live drift"]
+    C4["observability: 1 alert = 1 runbook<br/>promtool unit tests"]
+    C1 ~~~ C2 ~~~ C3 ~~~ C4
+  end
+
+  subgraph D["At merge"]
+    direction TB
+    D1["Branch protection<br/>ci required, up to date"]
+    D2["Independent agent review<br/>platform-impacting changes"]
+    D3["A human reviews and merges"]
+    D1 ~~~ D2 ~~~ D3
+  end
+
+  subgraph E["At deploy"]
+    direction TB
+    E1["GitOps only, selfHeal<br/>risky apps are manual sync"]
+    E2["Image tag = commit SHA"]
+    E3["Canary with automated<br/>SLO analysis"]
+    E4["ResourceQuota and LimitRange<br/>per namespace"]
+    E1 ~~~ E2 ~~~ E3 ~~~ E4
+  end
+
+  subgraph F["At runtime"]
+    direction TB
+    F1["Cilium NetworkPolicies"]
+    F2["Hardened pods: non-root,<br/>read-only root, no capabilities"]
+    F3["Alerts with runbooks and SLOs"]
+    F4["Alertmanager → phone<br/>a human answers"]
+    F1 ~~~ F2 ~~~ F3 ~~~ F4
+  end
+
+  subgraph G["Known gaps (checked)"]
+    direction TB
+    G1["GitHub requires 0 approvals:<br/>review is a rule, not enforced"]
+    G2["observability has no<br/>required status check"]
+    G3["NetworkPolicies are not on<br/>every namespace yet"]
+    G4["A green gate can still<br/>mean a wrong system"]
+    G1 ~~~ G2 ~~~ G3 ~~~ G4
+  end
+
+  A ==> B ==> C ==> D ==> E ==> F
+  F ~~~ G
+
+  classDef before fill:#f1f5f9,stroke:#94a3b8,color:#334155
+  classDef sess fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
+  classDef ci fill:#dcfce7,stroke:#16a34a,color:#052e16
+  classDef merge fill:#fed7aa,stroke:#ea580c,color:#431407
+  classDef deploy fill:#f3e8ff,stroke:#9333ea,color:#3b0764
+  classDef run fill:#fef3c7,stroke:#d97706,color:#451a03
+  classDef gap fill:#fee2e2,stroke:#dc2626,color:#450a0a,stroke-width:2px
+
+  class A1,A2,A3 before
+  class B1,B2,B3 sess
+  class C1,C2,C3,C4 ci
+  class D1,D2,D3 merge
+  class E1,E2,E3,E4 deploy
+  class F1,F2,F3,F4 run
+  class G1,G2,G3,G4 gap

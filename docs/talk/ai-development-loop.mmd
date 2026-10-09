@@ -1,0 +1,43 @@
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'Helvetica, Arial, sans-serif', 'fontSize': '20px', 'lineColor': '#475569', 'primaryTextColor': '#0f172a'}, 'flowchart': {'curve': 'basis', 'nodeSpacing': 36, 'rankSpacing': 55, 'htmlLabels': true, 'padding': 16}}}%%
+flowchart TB
+
+  subgraph PLAN["1 · Plan  (the human sets the direction)"]
+    direction LR
+    GOAL(["Owner sets the goal<br/>and the priorities"])
+    ITEM["Backlog item = GitHub issue<br/>Purpose · Acceptance Criteria<br/>Dependencies · labels"]
+    MAIN["Main session<br/>reads the issue, routes it<br/>design → architect<br/>build → persona by label"]
+    GOAL --> ITEM --> MAIN
+  end
+
+  subgraph BUILD["2 · Build and review  (agents propose, gates and humans decide)"]
+    direction LR
+    ARCH["architect<br/>design calls become an ADR<br/>cannot edit code"]
+    ENG["Persona agents<br/>branch → code → tests<br/>→ docs → PR"]
+    CI{{"Required CI gates<br/>tests · CVE scan · schemas<br/>drift · runbook checks"}}
+    IND["Independent review<br/>platform changes: a fresh<br/>agent, never the author"]
+    HUM(["Owner reviews<br/>and merges<br/>nothing merges itself"])
+    ARCH --> ENG --> CI --> IND --> HUM
+    HUM -->|"changes requested"| ENG
+  end
+
+  subgraph SHIP["3 · Ship, operate, learn"]
+    direction LR
+    DEP{{"ArgoCD deploys<br/>canary + SLO gate"}}
+    VER["Verify live<br/>Done = merged<br/>AND verified"]
+    OPS(["Operate<br/>alerts, runbooks,<br/>a human answers"])
+    STAFF["Staff-level review<br/>independent audit<br/>of the whole system"]
+    NEXT(["Back to step 1<br/>new items, milestones,<br/>ADRs"])
+    DEP --> VER --> OPS --> STAFF --> NEXT
+  end
+
+  PLAN ==> BUILD ==> SHIP
+
+  classDef human fill:#fed7aa,stroke:#ea580c,color:#431407,stroke-width:3px
+  classDef ai fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
+  classDef gate fill:#dcfce7,stroke:#16a34a,color:#052e16
+  classDef art fill:#f1f5f9,stroke:#94a3b8,color:#334155
+
+  class GOAL,HUM,OPS human
+  class MAIN,ARCH,ENG,IND,STAFF ai
+  class CI,DEP gate
+  class ITEM,VER,NEXT art
