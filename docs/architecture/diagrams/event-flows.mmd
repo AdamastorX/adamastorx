@@ -1,0 +1,37 @@
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'Helvetica, Arial, sans-serif', 'fontSize': '20px', 'lineColor': '#475569', 'primaryTextColor': '#0f172a'}, 'flowchart': {'curve': 'basis', 'nodeSpacing': 34, 'rankSpacing': 60, 'htmlLabels': true, 'padding': 16}}}%%
+flowchart TB
+
+  subgraph F1["ClinVar: a weekly release invalidates caches and notifies subscribers"]
+    direction LR
+    NCBI(["NCBI<br/>ClinVar VCF<br/>(weekly)"]) --> CLIN["clinvar-service<br/>diff vs previous release"]
+    CLIN --> T1{{"clinvar.<br/>ingestion.completed"}}
+    T1 -->|"drop changed<br/>cache keys"| API2["api · Redis"]
+    T1 -->|"notify<br/>subscribers"| WATCH["watchlist-service"] --> NTFY(["ntfy.sh<br/>phone"])
+  end
+
+  subgraph F2["Work items: guaranteed delivery with an outbox"]
+    direction LR
+    API["api<br/>+ outbox table"] -->|"relay"| T2{{"work-items"}} --> WORK["workers<br/>KEDA scales on lag"]
+  end
+
+  subgraph F3["Market data: prices and news become one live view"]
+    direction LR
+    FIN(["Finnhub<br/>websocket"]) --> MDI["market-data-<br/>ingestor"] --> T3{{"stock.price.tick"}}
+    RSS(["WSJ · MarketWatch<br/>RSS"]) --> NEWS["news-ingestor"] --> T4{{"news.article.<br/>published"}} --> SENT["sentiment-<br/>analyzer"] --> T5{{"news.sentiment.<br/>scored"}}
+    T3 --> AGG["aggregator<br/>Kafka Streams"]
+    T5 --> AGG
+    AGG -->|"GET /aggregates"| VIS["visualizer"]
+  end
+
+  F1 ~~~ F2
+  F2 ~~~ F3
+
+  classDef ext fill:#f1f5f9,stroke:#94a3b8,color:#334155
+  classDef svc fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
+  classDef mkt fill:#ecfccb,stroke:#65a30d,color:#1a2e05
+  classDef topic fill:#fde68a,stroke:#b45309,color:#451a03,stroke-width:3px
+
+  class NCBI,NTFY,FIN,RSS ext
+  class CLIN,API,API2,WATCH,WORK svc
+  class MDI,NEWS,SENT,AGG,VIS mkt
+  class T1,T2,T3,T4,T5 topic
