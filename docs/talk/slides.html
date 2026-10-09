@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AdamastorX: the AI development loop</title>
+<style>
+  :root { --bg:#0f172a; --fg:#f1f5f9; --mute:#94a3b8; --acc:#fb923c; --card:#1e293b; --ok:#4ade80; --bad:#f87171; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+    font:22px/1.45 Helvetica,Arial,sans-serif; overflow:hidden; }
+  .slide { display:none; position:absolute; inset:0; padding:5vh 6vw 9vh; flex-direction:column; justify-content:center; gap:2vh; }
+  .slide.on { display:flex; }
+  .kicker { color:var(--acc); text-transform:uppercase; letter-spacing:.12em; font-size:.65em; font-weight:700; }
+  h1 { font-size:2.3em; margin:0; line-height:1.1; }
+  h2 { font-size:1.7em; margin:0; line-height:1.15; }
+  ul { margin:0; padding-left:1.1em; } li { margin:.35em 0; }
+  .mute { color:var(--mute); }
+  .quote { border-left:5px solid var(--acc); padding:.2em 0 .2em 1em; font-size:1.25em; font-style:italic; }
+  img.fig { max-width:100%; max-height:68vh; object-fit:contain; background:#fff; border-radius:10px; padding:8px; align-self:center; }
+  table { border-collapse:collapse; font-size:.8em; width:100%; }
+  th,td { text-align:left; padding:.45em .7em; border-bottom:1px solid #334155; vertical-align:top; }
+  th { color:var(--acc); }
+  code { background:var(--card); padding:.05em .35em; border-radius:4px; font-size:.9em; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:3vw; }
+  .card { background:var(--card); border-radius:10px; padding:1em 1.2em; }
+  .big { font-size:3em; font-weight:700; color:var(--acc); line-height:1; }
+  .bad { color:var(--bad); } .ok { color:var(--ok); }
+  .notes { display:none; position:fixed; left:0; right:0; bottom:0; max-height:34vh; overflow:auto;
+    background:#020617f2; border-top:2px solid var(--acc); padding:1em 6vw; font-size:.7em; color:#cbd5e1; z-index:5; }
+  body.showNotes .notes.on { display:block; }
+  .hud { position:fixed; right:1.5vw; bottom:1vh; font-size:.55em; color:var(--mute); z-index:6; }
+  @media (max-width:800px) { html,body{font-size:16px;} .cols{grid-template-columns:1fr;} .slide{overflow:auto;justify-content:flex-start;} }
+</style>
+</head>
+<body>
+
+<section class="slide">
+  <div class="kicker">AdamastorX · homelab platform · 12 weeks</div>
+  <h1>Building with AI agents:<br>the loop, what went wrong, and the gates</h1>
+  <p class="mute">One owner, four repos, one single-node Kubernetes cluster.</p>
+  <div class="notes">Opening. Everything here is about one project with one owner. It is an observation, not a benchmark. Every claim in the deck has a source in the repo.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part A · how the work flows</div>
+  <h2>The loop</h2>
+  <img class="fig" src="ai-development-loop.svg" alt="The AI development loop">
+  <div class="notes">Walk top to bottom and point at the three orange boxes: the human sets direction, the human reviews and merges, the human answers the alert. Agents work in the middle. Nothing merges itself, whoever wrote it. Source: .claude/WORKFLOW.md.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Roles</div>
+  <h2>Five personas, least privilege</h2>
+  <table>
+    <tr><th>Persona</th><th>Owns</th><th>Tools</th></tr>
+    <tr><td><code>architect</code></td><td>design calls, ADRs</td><td>Read, Grep, Glob, Write. No Edit, no Bash</td></tr>
+    <tr><td><code>platform-engineer</code></td><td>Terraform, Helm, ArgoCD, CI</td><td>+ Edit, Bash</td></tr>
+    <tr><td><code>backend-engineer</code></td><td>Spring Boot, Kafka, Redis, Postgres</td><td>+ Edit, Bash</td></tr>
+    <tr><td><code>observability-engineer</code></td><td>telemetry, dashboards, alerts, SLOs</td><td>+ Edit, Bash</td></tr>
+    <tr><td><code>documentation-engineer</code></td><td>READMEs, ADRs after a merge</td><td>no Bash</td></tr>
+  </table>
+  <p>The main session routes each issue <b>by label</b>. A persona is a role <i>and</i> a limit.</p>
+  <div class="notes">The point is not having many agents; it is separating contexts and giving each only the power it needs. The architect cannot change code, so a design decision has to land as an ADR. Source: .claude/agents/*.md, WORKFLOW.md.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Project management</div>
+  <h2>Plain GitHub, plus one honest source of truth</h2>
+  <ul>
+    <li><b>Issue = backlog item:</b> purpose, acceptance criteria, dependencies, priority, labels</li>
+    <li><b>Definition of Ready / Done</b>; Done includes the human reviewing and merging</li>
+    <li><b>Milestones M0–M17</b>, "ordered by goal, not a hard gate"</li>
+    <li><b>Org project board</b>, five columns: Inbox, Ready, In Progress, Review, Done</li>
+    <li>The real source of truth is <code>docs/roadmap/backlog.md</code>; the board mirrors it</li>
+  </ul>
+  <div class="notes">The Markdown backlog wins, the board is a mirror. That was not the design; it is what we learned (see the friction slide). Sources: .claude/PROJECT.md, docs/roadmap/milestones.md, project-board.md, ADR 0042.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Reviews</div>
+  <h2>Reviews come in layers</h2>
+  <ul>
+    <li>A <b>persona agent</b> authors the change and opens a PR</li>
+    <li><b>Required CI</b> runs the mechanical checks</li>
+    <li>An <b>independent review</b> by a fresh agent, never the author, for platform-impacting changes</li>
+    <li><b>The owner reviews and merges</b></li>
+    <li>Periodically, a <b>staff-level review</b> of the whole system</li>
+  </ul>
+  <p class="quote">"A second, unbiased read, not a rubber stamp from the same context that already talked itself into the approach."</p>
+  <div class="notes">The quote is literal from WORKFLOW.md, and it was written after the step was skipped on the first platform changes. Source: .claude/WORKFLOW.md.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Staff-level analysis</div>
+  <h2>An independent audit, on a schedule</h2>
+  <table>
+    <tr><th>Date</th><th>What it found</th></tr>
+    <tr><td>2026-08-06, 08-09</td><td>Drift between docs and reality; live access added</td></tr>
+    <tr><td>2026-08-11</td><td>"Never ship a component without its alert" violated for a whole class; rebuild had no whole-system acceptance criteria</td></tr>
+    <tr><td>2026-08-15</td><td>A 33-hour alert nobody answered: build rate had outrun operate rate</td></tr>
+    <tr><td>2026-08-21</td><td>Full audit: untracked debt, prose-only rules, Claude Code features unused</td></tr>
+    <tr><td>2026-10-01</td><td>Agent loops: "adopt, narrowed"; human outer loop "unchanged, and load-bearing"</td></tr>
+  </table>
+  <p class="mute">Rule: verify live, do not assume. Each review ends with a review of itself.</p>
+  <div class="notes">These are measured facts from the live cluster that became backlog items and ADRs, not generic advice. Sources: docs/reviews/*.md, docs/operations/2026-08-11-cycle-1-the-33-hour-incident.md.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">The human in the loop</div>
+  <h2>Where people sit</h2>
+  <table>
+    <tr><th>The human decides</th><th>Example</th></tr>
+    <tr><td>Direction and priorities</td><td>the four objectives every review is graded against</td></tr>
+    <tr><td>Design trade-offs</td><td>the architect writes the ADR, the owner accepts it</td></tr>
+    <tr><td>What merges</td><td>every PR, however small</td></tr>
+    <tr><td>What touches the live system</td><td>a mutating <code>kubectl</code> needs explicit confirmation</td></tr>
+    <tr><td>Keep or kill</td><td>"keep Mimir", recorded as a decision</td></tr>
+    <tr><td>The physical world</td><td>a network cable, a router reservation</td></tr>
+    <tr><td><b>Answering the alert</b></td><td>the 33-hour incident</td></tr>
+  </table>
+  <div class="notes">The human role is deciding, accepting accountability and acting in the physical world. Sources: WORKFLOW.md, backlog #135 and #162.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">An experiment</div>
+  <h2>Bounded agent loops</h2>
+  <div class="cols">
+    <div class="card"><div class="big">1</div>iteration to green<br><span class="mute">$0.37, diff identical to the human PR</span></div>
+    <div class="card"><div class="big">8</div>preconditions<br><span class="mute">one of them: no <code>KUBECONFIG</code> in the loop</span></div>
+  </div>
+  <ul>
+    <li>Verdict: <b>adopt, narrowed</b>, as a technique, not a working model</li>
+    <li>It converged in one step <i>because the task was fully specified</i>; $0.37 is a floor</li>
+    <li class="ok"><b>"The test went green" is never a merge criterion.</b></li>
+  </ul>
+  <div class="notes">Tell it honestly, including the review's own critique: two agents agreeing shows the patch is the obvious one, not that it is correct. Sources: docs/reviews/2026-10-01-agentic-working-model-assessment.md, docs/runbooks/verified-agentic-loop.md, ADR 0046.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part B · what went wrong</div>
+  <h2>The agents did not follow the workflow</h2>
+  <img class="fig" src="problems-timeline.svg" alt="Timeline of problems and fixes">
+  <div class="notes">Set up the three-cause split on the next slide. Sources: commits 0975d44, 30f50c7, b135581; ADR 0042; docs/operations/2026-08-11-cycle-1-the-33-hour-incident.md.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Three different causes</div>
+  <h2>Only the last one is about willpower</h2>
+  <ul>
+    <li><b>A configuration bug (Jul 18).</b> The persona files were prose only and "never ran": no frontmatter, so the Agent tool could not invoke them.</li>
+    <li><b>Convenience (Jul 19–24).</b> Design calls were made inline by the driving session instead of the architect; independent review "didn't happen" on the first platform changes.</li>
+    <li><b>Friction (Aug 15).</b> Personas "never delegated to through the mechanism"; of 146 board cards, <b>12</b> ever had a status.</li>
+  </ul>
+  <div class="notes">The first was our configuration error, not the AI disobeying. The second is the natural shortcut. The third is how any human team behaves.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">The lesson</div>
+  <p class="quote" style="font-size:1.6em">A process survives in proportion to how much friction it takes to skip it, not how well-reasoned it was when written down.</p>
+  <p class="mute">ADR 0042</p>
+  <ul>
+    <li>Review-before-merge survived because skipping it has consequences. The board did not, because skipping it costs nothing.</li>
+    <li>The fix was never "tell the agents harder". It was: <b>make the right thing the easy thing</b>.</li>
+  </ul>
+  <div class="notes">The central sentence of Part B, and it is from the project's own ADR.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Gates are not proof</div>
+  <h2>Green is not correct</h2>
+  <ul>
+    <li><b>Cluster rebuild:</b> 35/35 scrape targets up, <code>cilium status OK</code>, and the system was broken in three places. The checks tested components, not the business path.</li>
+    <li><b>An alert that could never fire:</b> a <code>&gt;</code> between metrics with different labels. It passed review and CI; a live query found it.</li>
+    <li><b>Kafka heap:</b> every comment said "75% of the limit"; it was a percentage of the <i>host's</i> RAM. The broker kept getting OOM-killed until <code>jcmd</code> showed the real value.</li>
+    <li><b>"Done" that wasn't live:</b> a merge to a manual-sync Application changes nothing until someone syncs it.</li>
+  </ul>
+  <p class="mute">Some of these were the AI's own mistakes. That is the point: the weak spot is the process, not one model.</p>
+  <div class="notes">Sources: docs/reviews/2026-08-11 (4b.3), docs/SESSION_STATE.md, backlog #123, #142, #161.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">The thesis</div>
+  <h2>AI amplifies what is already there</h2>
+  <div class="cols">
+    <div class="card"><b class="ok">Amplified for the better</b><ul><li>ADRs, small single-concern PRs</li><li>tests written to fail first</li><li>536 merged PRs in 12 weeks</li><li>docs updated in the same PR</li></ul></div>
+    <div class="card"><b class="bad">Amplified for the worse</b><ul><li>decisions made inline, unreviewed</li><li>rules that exist only as prose</li><li>an alert nobody answers (33 h)</li><li>a board nobody maintains</li></ul></div>
+  </div>
+  <p>Building got cheap. What stayed scarce: <b>review, decisions, operation, accountability.</b></p>
+  <p class="mute">One project, one owner, no human-only baseline. An observation, not a benchmark.</p>
+  <div class="notes">Mark clearly that this is a single case, not a productivity measurement.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">My view</div>
+  <h2>The bottleneck is the human</h2>
+  <ul>
+    <li>Detection worked: 189 notifications delivered, zero failures. <b>The response was human</b>, up to 33 hours later.</li>
+    <li>This week's blockers were human or physical: a merge decision, a router reservation, which updates to accept, whether to keep a component.</li>
+    <li>Faster agents move the queue to the human; they don't remove it.</li>
+  </ul>
+  <div class="card"><b>Roles change, people stay.</b>
+    <ul><li><b>Dev:</b> less typing, more specifying, designing gates, reviewing</li>
+    <li><b>Ops:</b> less running things, more owning the signal and the response</li>
+    <li><b>New:</b> someone builds and maintains the guardrails</li>
+    <li>People remain for accountability, judgment under ambiguity, and the physical world</li></ul></div>
+  <div class="notes">This part is opinion; present it as such. The evidence is the staff reviews, the where-people-sit slide and the three causes. Source: the 33-hour incident write-up.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part C · gates and guardrails</div>
+  <h2>What we actually have</h2>
+  <img class="fig" src="gates-and-guardrails.svg" alt="Gates and guardrails by stage, with known gaps">
+  <div class="notes">Do not read the whole list. Pick one per layer and tell a story: the Trivy CVE gate, the hook that stops a kubectl delete without confirmation. Sources: each repo's ci workflow, WORKFLOW.md, verified-agentic-loop.md.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Honest gaps · checked 2026-10-09</div>
+  <h2>What the gates don't cover</h2>
+  <ul>
+    <li>GitHub requires <b>0 approvals</b> in all four repos: "the human reviews" is a rule, not an enforcement</li>
+    <li><code>observability</code> has <b>no required status check</b></li>
+    <li><code>enforce_admins</code> is off everywhere</li>
+    <li>NetworkPolicies are not on every namespace yet (#126)</li>
+    <li>The confirmation hook is a speed bump for one operator, not a security boundary</li>
+    <li>A green gate can still mean a wrong system: the answer is business-path checks (#123)</li>
+  </ul>
+  <div class="notes">Showing the gaps makes the talk more credible than the gate list alone. Sources: gh api branches/main/protection, backlog #126 and #123.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Takeaways</div>
+  <h2>Three things to take home</h2>
+  <ol>
+    <li><b>Make the right thing the easy thing.</b> Prose rules decay; mechanical ones last.</li>
+    <li><b>Gates are not proof.</b> Verify against the real system, and say what you didn't verify.</li>
+    <li><b>AI moves the bottleneck, it doesn't remove it.</b> Plan for the human who reviews, decides and answers the page.</li>
+  </ol>
+  <p class="mute">One owner · one system · twelve weeks · no control group.</p>
+  <div class="notes">Close with the thesis: the work becomes designing the system in which humans and agents work together.</div>
+</section>
+
+<div class="hud"><span id="pos"></span> · ← → navigate · N notes · F fullscreen</div>
+
+<script>
+(function () {
+  var s = [].slice.call(document.querySelectorAll('.slide')), i = 0;
+  function show(n) {
+    i = Math.max(0, Math.min(s.length - 1, n));
+    s.forEach(function (e, k) {
+      e.classList.toggle('on', k === i);
+      var nt = e.querySelector('.notes'); if (nt) nt.classList.toggle('on', k === i);
+    });
+    document.getElementById('pos').textContent = (i + 1) + ' / ' + s.length;
+    try { history.replaceState(null, '', '#' + (i + 1)); } catch (e) {}
+  }
+  document.addEventListener('keydown', function (e) {
+    if (['ArrowRight', 'PageDown', ' ', 'Enter'].indexOf(e.key) >= 0) { e.preventDefault(); show(i + 1); }
+    else if (['ArrowLeft', 'PageUp', 'Backspace'].indexOf(e.key) >= 0) { e.preventDefault(); show(i - 1); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(s.length - 1);
+    else if (e.key === 'n' || e.key === 'N') document.body.classList.toggle('showNotes');
+    else if (e.key === 'f' || e.key === 'F') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); }
+  });
+  document.addEventListener('click', function (e) { if (e.clientX > innerWidth / 2) show(i + 1); else show(i - 1); });
+  show((parseInt(location.hash.slice(1), 10) || 1) - 1);
+})();
+</script>
+</body>
+</html>
