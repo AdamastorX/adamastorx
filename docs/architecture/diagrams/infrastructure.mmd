@@ -1,0 +1,58 @@
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'Helvetica, Arial, sans-serif', 'fontSize': '20px', 'lineColor': '#475569', 'primaryTextColor': '#0f172a'}, 'flowchart': {'curve': 'basis', 'nodeSpacing': 40, 'rankSpacing': 70, 'htmlLabels': true, 'padding': 18}}}%%
+flowchart TB
+
+  subgraph NET["Internet"]
+    direction LR
+    GH["GitHub<br/>repos · Actions · ghcr.io"]
+    EXT["External services<br/>Finnhub · RSS · NCBI · ntfy.sh"]
+  end
+
+  subgraph HOME["Home network  192.168.1.0/24"]
+    direction LR
+    AP["Router + Wi-Fi AP<br/>192.168.1.1"]
+    MAC["Operator's Mac<br/>kubectl · gh · SSH tunnel"]
+    TS(["Tailscale<br/>private mesh to the host"])
+    MAC --> TS
+  end
+
+  subgraph HOST["adamastorx  ·  GMKtec NucBox K8 Plus (mini PC), up for weeks"]
+    direction TB
+
+    subgraph HW["Hardware"]
+      direction LR
+      CPU["AMD Ryzen 7<br/>8845HS<br/>8 cores / 16 threads"]
+      RAM["58 GiB RAM<br/>+ 8 GiB swap"]
+      SSD[("1 TB NVMe<br/>288 GB root partition")]
+      NIC["Network<br/>2 × 2.5 GbE: unused, no cable<br/>USB Wi-Fi: in use, DHCP"]
+      CPU ~~~ RAM ~~~ SSD ~~~ NIC
+    end
+
+    subgraph SW["Software stack"]
+      direction LR
+      OS["Ubuntu 26.04 LTS<br/>kernel 7.0"]
+      K3S["k3s v1.36<br/>1 node: control plane + worker<br/>flannel, kube-proxy, built-in policy OFF"]
+      CIL["Cilium (eBPF)<br/>replaces kube-proxy · VXLAN<br/>NetworkPolicies · Hubble"]
+      ARGO["ArgoCD<br/>GitOps, app-of-apps"]
+      APPS["Workloads<br/>services · Kafka · PostgreSQL · Redis<br/>observability stack<br/>storage: local-path on the NVMe"]
+      OS --> K3S --> CIL --> ARGO --> APPS
+    end
+
+    HW ~~~ SW
+  end
+
+  NET -->|"Git, images"| HOST
+  HOME -.->|"Wi-Fi + DHCP: the weak link"| HOST
+
+  classDef net fill:#f1f5f9,stroke:#94a3b8,color:#334155
+  classDef home fill:#dcfce7,stroke:#16a34a,color:#052e16
+  classDef hw fill:#fef3c7,stroke:#d97706,color:#451a03
+  classDef sw fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
+  classDef weak fill:#fee2e2,stroke:#dc2626,color:#450a0a,stroke-width:3px
+
+  class GH,EXT net
+  class AP,MAC,TS home
+  class CPU,RAM,SSD hw
+  class NIC weak
+  class OS,K3S,CIL,ARGO,APPS sw
+
+  linkStyle 10 stroke:#dc2626,stroke-width:4px,stroke-dasharray:8 5
