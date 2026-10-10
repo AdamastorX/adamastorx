@@ -29,6 +29,8 @@ state.
 | **M15 Consolidation: Operate What You Built** | Close the gaps the expansion phase opened — every shipped service gets its dashboards/SLOs/alerts including the pipeline freshness SLO, Kafka durability is re-decided against the system that exists now, long-term retention enables SLO reporting over time, and dependency/backup/secrets hygiene is automated. No new application services (ADR 0031). |
 | **M16 Canary + SLO Operational Maturity** | Exercise and calibrate the canary-deployment and SLO machinery that already exists (#46, ADR 0020) — a recurring, dated drill cadence, real threshold calibration once #94's 30-day retention window closes, and an article evidence pack. Zero new components (ADR 0043). |
 | **M17 Close the Blind Spots: Harden and Self-Monitor** | Close the debt the project's own tooling can't see (2026-08-21 full audit, ADR 0044) — application-workload security hardening (`securityContext`), the observability stack's own-backend blind spots and the alert already crying wolf, and the record-keeping drift the doc-drift automation doesn't catch — plus the first Claude Code hooks/skills that turn trust-based safety rules and re-read procedures into enforced, loadable ones. Zero new always-on runtime components (the M16/ADR 0043 discipline, continued). |
+| **M18 Operate on Wi-Fi: No Silent Failures** | The NucBox stays on Wi-Fi (owner decision, 2026-10-09), so the cluster must tolerate and report that link: fix the Degraded `api` rollout and the merge-order gap behind it (#163), make Renovate PRs run CI (#164), page from outside the house when the cluster goes dark (#165), alert on the uplink and the API server (#166), reframed #162, then the record and security debt the 2026-10-09 review found (#167-#170). One new external dependency (a heartbeat service), no new in-cluster component. |
+| **M19 Two-Node Substrate: the T460s Joins** | The original host returns as a tainted agent (ADR 0047): pre-join clean slate (#171), scheduling guardrails (#172), Cilium and policies correct on two nodes (#173), a pinned, rehearsed Terraform join (#174), requests sized for split capacity (#175), an off-node backup copy (#176); then #51/#52 finally run. |
 
 M6–M9 are the expansion phase (ADR 0022). The goal changed — breadth and
 novelty, on top of the tight core ADR 0021 produced — and ADR 0022 states
@@ -173,3 +175,16 @@ its window closes (~2026-09-06) or carry the PVC across with the #49 PVC-copy
 discipline; a naive host move that resets that clock destroys the single most
 differentiated unpublished asset the project has. Once done, the migration
 is what finally clears M7's hardware gate for #51/#52/#69 and the Istio mesh.
+
+**M18 and M19 (2026-10-09) follow the 2026-10-09 project review**
+(`docs/reviews/2026-10-09-project-review-opus.md`). The migration to the
+NucBox (#154) happened; the multi-node substrate ADR 0045 announced did
+not, and the paragraph above, written before the cutover, is now history.
+Two owner decisions frame what follows: the NucBox stays on its USB Wi-Fi
+dongle, and the T460s becomes the second node. **M18 goes first**, and #163
+(the Degraded `api` Rollout) goes first within it, alone. **M19 does not
+start until #163 and #165 are Done**: a second node on a cluster that can
+go dark for a month unnoticed doubles what can go dark. Within M19 the
+order is strict: #171 → #172 and #173 → #174 → #175/#176, then #51 and #52,
+whose dependency on the superseded #48 now points at #174. The relaxed
+sequencing rule above still applies to everything else.
