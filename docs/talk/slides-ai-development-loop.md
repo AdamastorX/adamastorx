@@ -289,4 +289,6 @@ Three slides in `slides.html` (before the takeaways), images in `img/`:
 - **The infrastructure, on one screen**: Grafana "Infrastructure overview" (CPU/memory/disk gauges, the Wi-Fi link panels, ArgoCD counts).
 - **The services: what is running and how loaded**: Grafana "Services overview". This capture groups by namespace; the table has since become one row per workload, so re-capture before presenting.
 - **The network: who talks to whom**: Hubble, namespace `api` (API, PostgreSQL, Redis inside; Kafka, Pyroscope, OpenTelemetry collector, Prometheus, Traefik outside).
+- **The product: a real ClinVar lookup**: the Clinical Variant Explorer (rs80359550, BRCA2). An unrelated browser tooltip was painted out of the capture.
+- **The market pipeline: prices and sentiment**: the market sentiment viewer, captured on a Saturday (flat prices, one tick per window).
 

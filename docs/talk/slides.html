@@ -278,6 +278,34 @@
 </section>
 
 <section class="slide">
+  <div class="kicker">Part D · Demo</div>
+  <h2>The product: a real ClinVar lookup</h2>
+  <div class="split">
+    <img src="img/clinvar-variant-explorer.png" alt="Clinical Variant Explorer showing rs80359550 in BRCA2">
+    <ul>
+      <li><b>Real data, nothing mocked:</b> a ClinVar release ingested by <code>clinvar-service</code>, served through <code>api</code></li>
+      <li><b>The answer:</b> rs80359550, BRCA2, pathogenic, reviewed by expert panel, with the release that produced it</li>
+      <li><b>Behind one click:</b> browser, API, cache, ClinVar service, database</li>
+    </ul>
+  </div>
+  <div class="notes">The viewer is a small front end over api's GET /variants/lookup. The ClinVar release id on the card is the one the cache entry was built from; when clinvar-service ingests a newer release it publishes an event and api deletes exactly the keys that changed. The product is a vehicle: it exists to make the platform do real work, not to be a product. Capture note: an unrelated browser tooltip was painted out of this screenshot.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part D · Demo</div>
+  <h2>The market pipeline: prices and sentiment</h2>
+  <div class="split">
+    <img src="img/market-sentiment-viewer.png" alt="Real-time market sentiment viewer with five tickers">
+    <ul>
+      <li><b>Two streams joined:</b> trades from a market feed and news sentiment, per ticker, in 15-minute windows</li>
+      <li><b>Honest empty states:</b> one tick and +0.00% because this was captured on a Saturday, with the market closed</li>
+      <li><b>Sentiment</b> is scored from news articles in the same window</li>
+    </ul>
+  </div>
+  <div class="notes">Aggregator joins the price ticks (market-data-ingestor) with sentiment scores (news-ingestor then sentiment-analyzer) over a tumbling window and the viewer reads GET /aggregates. The page itself says news and ticks are sparse outside trading hours and renders that honestly rather than as zero. To show movement, capture on a weekday during US market hours. Event flow diagram: docs/architecture/diagrams/event-flows.</div>
+</section>
+
+<section class="slide">
   <div class="kicker">Takeaways</div>
   <h2>Three things to take home</h2>
   <ol>
