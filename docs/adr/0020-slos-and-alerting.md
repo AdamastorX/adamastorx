@@ -315,3 +315,60 @@ number differs meaningfully from 500ms, this ADR gets a third
 addendum recording old value, new value, and why — the same pattern
 this section and the one above it both already established, not a
 one-off exception.
+
+## Addendum (2026-10-10): the SLO objectives and windows this ADR deferred
+
+The ADR's SLO table defines SLIs only and defers "error budgets and exact
+thresholds" until real metrics exist. By 2026-10-10 they do, and the
+owner's review of the first SLO dashboard (`SLO Overview`, platform#240)
+found the consequence: the project had SLIs and alert trip-points but no
+SLO, which needs an SLI **and** an objective **and** a window. This
+addendum declares them. It also corrects two facts the earlier text and
+README repeated: Prometheus's configured retention is **30d** (the limit
+is data depth: the oldest sample is 2026-10-03T16:09Z), and the canary's
+`api-slo-check` p95 threshold is **500ms**, not 1000ms.
+
+**Windows.** Operational window: a 7-day rolling window, measurable from
+2026-10-10 16:09Z. Declared window: 28 days, measurable from about
+2026-10-31 16:09Z if no data gap occurs; it is not shown before then. #94's
+30-day report and #137's calibration read the same series.
+
+**Calculation.** compliance = good events / valid events over the window;
+error budget remaining = 1 - (1 - compliance) / (1 - objective). Status:
+**Breached** if the budget is below 0, **At risk** below 25%, otherwise
+**Met**. **Minimum events:** an SLO is evaluated only when the window holds
+at least 10 / (1 - objective) valid events (100 for 99%, 2,000 for 99.5%);
+below that it shows "insufficient events", never a ratio.
+
+**Declared SLOs** (objectives are owner-approved 2026-10-10, derived from
+six days of data and to be recalibrated by #137 against the 28d window):
+
+| SLO id | Service | Good / valid events | Objective |
+|---|---|---|---|
+| `api-availability` | api | `outcome!="SERVER_ERROR"` / all of `http_server_requests_seconds_count{job="api", uri!~"/actuator.*"}` | 99.5% |
+| `api-latency` | api | requests at or under 500ms (`..._bucket` at the nearest bucket, 0.536870911s, until a 500ms bucket exists) / `_count` | 99% |
+| `price-freshness` | market pipeline | `aggregator_price_freshness_seconds_bucket{source="WEBSOCKET", le="30.0"}` / `_count{source="WEBSOCKET"}` | 99% |
+| `news-polls` | news-ingestor | `news_ingestor_feed_poll_total{outcome="succeeded"}` / all outcomes | 99% |
+| `tick-publish` | market-data-ingestor | `market_data_ticks_published_total` / (published + `market_data_ticks_publish_failed_total`) | 99.9% |
+| `aggregates-availability` | aggregator | non-5xx / all of `uri=~"/aggregates.*"` | 99.5% |
+| `sentiment-scoring` | sentiment-analyzer | articles scored without a consume or publish error / articles consumed | 99% (has about 10 events a week: expected to show "insufficient events") |
+
+**Declared but dormant** (an SLI exists in the table above, but nothing can
+be measured today, and each says why): `variants-lookup` (zero requests in
+6 days; a synthetic probe is #183), `clinvar-lookup` (the metric has no
+status label, #21e), `clinvar-ingestion-freshness` (time-based; it needs a
+last-success timestamp gauge, #184; shown as a status until then),
+`workers-listener` (`spring_kafka_listener_seconds_count` is not exported by
+`workers`, so `WorkersListenerErrorRate` cannot fire: #185),
+`watchlist-delivery` (zero delivery attempts in 6 days).
+
+**Not SLOs.** Consumer lag, the DLQ depth, disk, probes, restarts,
+ArgoCD sync state, scrape targets, backup age and telemetry-backend
+liveness are health and saturation signals. They keep their alerts and get
+their own "Service health" dashboard (#180); they are not shown as SLOs.
+
+**Alerting stays as ADR 0021 decided.** The existing threshold alerts remain
+the fast detection. One generic alert on an exhausted error budget
+(`SLOErrorBudgetExhausted`, #181) is added; multi-window burn-rate alerting
+(#21b) stays closed.
+

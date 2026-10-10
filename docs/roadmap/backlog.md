@@ -1635,36 +1635,56 @@ The owner decided on 2026-10-09 that the Lenovo T460s (the original host until #
 - Dependencies: #172, #174.
 - Priority: P2. Labels: `platform`. Open.
 
-## M20 SLO Dashboards: Readable at a Glance (owner priority, 2026-10-10)
+## M20 SLOs You Can Read: Objectives, Compliance, Budget (owner priority, 2026-10-10)
 
-The owner asked on 2026-10-10 for attractive, simple dashboards for the SLOs that already exist (ADR 0020), for the two application systems (the ClinVar variant-lookup path and the market-data pipeline) and for the infrastructure, because the current dashboards are hard to read: `platform/argocd/apps/grafana.yaml` carries per-service "Golden Signals" dashboards with roughly 60 timeseries and stat panels in all (grep count, 2026-10-10). This milestone adds a small set of one-screen SLO views on top of them; it does not delete or rewrite the detail dashboards. All five items are P0 by owner decision and start now. They touch only Grafana's Helm values, so they run alongside M18; #163 still goes first on the `api` Rollout. No new alert rules and no new component: the views show SLIs, thresholds and alerts that already exist.
+The owner asked on 2026-10-10 for attractive, simple dashboards for the SLOs, then pointed out that the first result (`SLO Overview`, platform#240) showed no SLOs at all: an SLO is an SLI plus an objective plus a window, and its tiles showed only a 5-minute SLI against an alert trip-point. A staff-level review (2026-10-10) confirmed it and found the cause upstream: ADR 0020 declared SLIs but deferred the objectives. This milestone fixes it in order: declare the objectives (#182, done as an ADR 0020 addendum), record compliance and budget as Prometheus recording rules (#177), show them in one table (#178), move the health signals that are not SLOs to their own dashboard (#180), make the table the Grafana home (#181), and fix the SLIs that cannot be measured yet (#183-#185). Prometheus is configured for 30d retention and holds data from 2026-10-03, so the 7-day window is measurable from 2026-10-10 16:09Z and the 28-day window from about 2026-10-31. No new component; no multi-window burn-rate alerting (ADR 0021).
 
-**177. SLO dashboard standard: one screen, status first, plus a shared layout**
-- Purpose: the existing dashboards show raw signals (rates, quantiles, heap) and make the reader work out whether anything is wrong. An SLO view answers one question per row, "is this meeting its target right now?". Repo: platform (dashboard JSON in `argocd/apps/grafana.yaml`), observability (`grafana/dashboards/README.md` for the design note).
-- Acceptance Criteria: (1) A written standard (README section): one row per SLO, a stat tile for the current SLI against its ADR 0020 threshold coloured green/amber/red, a small trend beside it, at most 8 panels visible without scrolling at 1920x1080, plain-language titles and units, the same colours and layout on every SLO dashboard. (2) The window is stated honestly: the error-budget or "over the window" figure uses only the retention that exists (Prometheus 3 days, Mimir about 6 days per the 2026-10-09 review); no 28 or 30-day claim until #94's window has closed. (3) One reference dashboard built to the standard for a single service, viewed on the live Grafana and confirmed readable by the owner. (4) Each tile's query is the same expression as the corresponding alert rule, so the dashboard cannot disagree with the alert.
+**182. Declare the SLO objectives and windows (ADR 0020 addendum)**
+- Purpose: ADR 0020 defined SLIs and deferred targets. Without an objective and a window there is no SLO to measure, show or alert on. Repo: adamastorx.
+- Acceptance Criteria: (1) A table of SLO id, good/valid events, objective, 7d operational window, 28d declared window with its measurable-from date, and the minimum-events rule. (2) Every zero-traffic SLI listed as dormant with the reason and the item that unblocks it. (3) The 30d retention and the 500ms canary threshold corrected. (4) Non-SLOs named as such.
+- Dependencies: none.
+- Priority: P0. Labels: `observability`, `documentation`. **Done (2026-10-10, ADR 0020 addendum).**
+
+**177. SLO recording rules: compliance and error budget per declared SLO**
+- Purpose: compute each declared SLO once, in Prometheus, so the dashboard and the alert read the same numbers. Repo: platform (`serverFiles["recording_rules.yml"]` in `argocd/apps/prometheus.yaml`), observability (CI).
+- Acceptance Criteria: (1) One rule group labelled by `slo` and `service` records `slo:good:increase7d`, `slo:valid:increase7d`, `slo:objective:ratio` (a constant, the one place the target lives), `slo:compliance:ratio7d` (with the minimum-events guard) and `slo:error_budget_remaining:ratio7d`. (2) observability CI runs `promtool check rules` and a `promtool test rules` unit test on the recording rules, including a guard case (too few events returns nothing) and a breach case. (3) Live: `slo:compliance:ratio7d` returns one series per measurable SLO and matches a hand-run ratio to 4 decimals; the guard returns nothing for `sentiment-scoring`. (4) The 28d siblings are added on or after 2026-10-31, not before.
+- Dependencies: #182.
+- Priority: P0. Labels: `observability`, `platform`. Open.
+
+**178. SLO table dashboard (replaces the per-system dashboards #178/#179)**
+- Purpose: one table with one row per declared SLO: name, objective, window, events in the window, current SLI (5m), compliance, error budget remaining, status (Met, At risk, Breached, Insufficient events). Repo: platform.
+- Acceptance Criteria: (1) Built only from `slo:*` series (a CI check fails otherwise). (2) Every row shows its objective, window and budget; low-traffic rows show "Insufficient events", dormant SLOs are listed as dormant with the reason. (3) The header counts SLOs from `slo:error_budget_remaining`, not tiles. (4) Replaces `SLO Overview`'s SLO tiles; viewed on the live Grafana and accepted by the owner.
+- Dependencies: #177.
+- Priority: P0. Labels: `observability`, `dashboard`. Open.
+
+**179. ~~Market-data pipeline SLO dashboard~~ — CLOSED, merged into #178 (one SLO table, not one dashboard per system)**
+
+**180. Service health dashboard: the signals that are not SLOs**
+- Purpose: consumer lag, DLQ depth, market feed liveness, disk, Kafka reachability, failing probes, ArgoCD sync, backup age, telemetry backends, restarting workloads and scrape targets are health and saturation signals, not SLOs. They keep a tile view (the current `SLO Overview` grid) under an honest name. Repo: platform.
+- Acceptance Criteria: (1) The current tile grid, minus the SLO tiles, renamed `Service health`, with no panel titled or described as an SLO. (2) Each tile names its alert or says there is none. (3) The tile counters count healthy and unhealthy, not "SLOs". (4) The preliminary-threshold tiles stay labelled preliminary.
 - Dependencies: none.
 - Priority: P0. Labels: `observability`, `dashboard`. Open.
 
-**178. ClinVar application SLO dashboard (gateway, api, workers, clinvar-service, watchlist-service)**
-- Purpose: one view of whether the variant-lookup path is healthy, built from ADR 0020's rows for `gateway`, `api` (including `GET /variants/lookup`), `workers` (consumer lag), `clinvar-service` (lookup success and ingestion freshness) and `watchlist-service` (delivery success). Repo: platform.
-- Acceptance Criteria: (1) A dashboard built to #177's standard with one row per SLO listed above, each tile showing the current SLI against its threshold. (2) A service that is down or has no data shows a distinct "no data" state, not green. (3) Each row links to the existing Golden Signals dashboard for drill-down. (4) Verified on the live Grafana with real data, with a screenshot saved under `docs/`; any SLO whose metric turns out not to exist is listed as a finding, not hidden.
-- Dependencies: #177.
+**181. SLO table as the Grafana home, one budget alert, and parity by construction**
+- Purpose: make the table the entry point and keep the dashboard and the alert from disagreeing. Repo: platform, observability.
+- Acceptance Criteria: (1) Grafana's home dashboard is the SLO table, with `Service health` and the Golden Signals one click away. (2) One alert, `SLOErrorBudgetExhausted` (`slo:error_budget_remaining:ratio7d < 0`, warning), reads the same series as the table, with a runbook in `observability/runbooks/`. (3) A CI check fails if a query in an SLO dashboard does not start from `slo:`. (4) `docs/architecture/` and the observability README describe the set.
+- Dependencies: #178, #180.
 - Priority: P0. Labels: `observability`, `dashboard`. Open.
 
-**179. Market-data pipeline SLO dashboard (market-data-ingestor, news-ingestor, sentiment-analyzer, aggregator, end-to-end freshness)**
-- Purpose: the second application system: tick publish success, feed poll success, sentiment consume/publish success, `aggregator` availability, and the pipeline freshness SLO (`aggregator_price_freshness_seconds`, websocket ticks only, ADR 0020). Repo: platform.
-- Acceptance Criteria: (1) A dashboard built to #177's standard with one row per SLO above. (2) The freshness tile filters to the websocket series by construction, as the alert does, and shows when the market is closed so a quiet pipeline outside trading hours is not shown as an incident. (3) "No data" is distinct from green. (4) Verified live with a screenshot, as in #178.
+**183. Synthetic traffic for `GET /variants/lookup`**
+- Purpose: the headline path has had zero requests in six days, so `variants-lookup` is dormant. A low-rate synthetic probe gives it a measurable SLI without inventing a ratio. Repo: platform, observability.
+- Acceptance Criteria: (1) A probe or CronJob calls `GET /variants/lookup` through the real ingress with the real auth path. (2) `sum(increase(http_server_requests_seconds_count{job="api", uri="/variants/lookup"}[1d])) >= 1000`. (3) The load is stated and small. (4) `variants-lookup` moves from dormant to declared in the ADR table.
 - Dependencies: #177.
-- Priority: P0. Labels: `observability`, `dashboard`. Open.
+- Priority: P1. Labels: `observability`. Open.
 
-**180. Infrastructure dashboard: node, API server, Kafka, PostgreSQL, ArgoCD, backups**
-- Purpose: a single health view of the platform the applications run on, for a single-node cluster on Wi-Fi: node CPU, memory and disk, k3s API-server reachability, Kafka and Postgres health, ArgoCD sync and health per Application, pod restarts and OOM kills, last successful backup per database. Repo: platform.
-- Acceptance Criteria: (1) A dashboard built to #177's standard where each tile is a status with a threshold, not a raw graph. (2) Uses only metrics that exist today; the uplink and leader-election panels are added when #166 ships, and the dashboard says so rather than showing empty tiles. (3) Backup tile reads the real CronJob success time. (4) Verified live with a screenshot.
-- Dependencies: #177.
-- Priority: P0. Labels: `observability`, `dashboard`. Open.
+**184. ClinVar last-successful-ingestion timestamp gauge (part of #21e)**
+- Purpose: `clinvar-ingestion-freshness` is time-based and cannot be computed as a ratio from a counter that was reset or starts after the last success. Repo: services.
+- Acceptance Criteria: (1) `clinvar_ingestion_last_success_timestamp_seconds` is exported by clinvar-service and survives a restart. (2) `time() - clinvar_ingestion_last_success_timestamp_seconds` returns the real age of the last successful ingestion. (3) `ClinVarIngestionFreshnessBreach` and the SLO read it.
+- Dependencies: none.
+- Priority: P1. Labels: `backend`, `observability`. Open.
 
-**181. Make the SLO views the entry point, and say how they are kept honest**
-- Purpose: a dashboard nobody opens decays. Make the three views what Grafana shows first, keep the detail dashboards one click away, and add the check that stops them drifting from the alerts. Repo: platform, observability.
-- Acceptance Criteria: (1) Grafana's home dashboard is the SLO overview linking #178, #179 and #180; existing detail dashboards remain, linked from each row. (2) A CI check or a documented query-parity test fails if a tile's expression differs from its alert rule's (extends the existing `prometheus-rules` checks in observability). (3) `docs/architecture/` and the observability README describe the dashboard set. (4) The owner reviews the live result and decides whether any detail dashboard is retired.
-- Dependencies: #178, #179, #180.
-- Priority: P0. Labels: `observability`, `dashboard`. Open.
+**185. `workers` listener metric: make `WorkersListenerErrorRate` able to fire, or remove it**
+- Purpose: `spring_kafka_listener_seconds_count` exists only for `api` and `watchlist-service`, so `WorkersListenerErrorRate` (and its tile) can never fire: a dead alert. Repo: services, observability.
+- Acceptance Criteria: (1) Either the series exists for `job="workers"` after one consumed message, or the alert, its runbook and its tile are removed with the reason recorded. (2) A `promtool test rules` case proves the alert fires on a synthetic error series, if kept.
+- Dependencies: none.
+- Priority: P1. Labels: `observability`, `backend`. Open.
