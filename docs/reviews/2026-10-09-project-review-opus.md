@@ -1,5 +1,11 @@
 # Project review after the migration: a canary that saved production, a month nobody saw, and what a second node needs — 2026-10-09
 
+> **Erratum, 2026-10-10.** The owner confirmed that the NucBox was **powered off deliberately** for the 33 days this review
+> calls an outage. It was not a failure. What the review found is still true as a *gap* (had the node gone dark by accident, nothing
+> would have reported it, and the 30-day retention would still have aged out the history), but "an outage nobody saw" and the
+> restart-counter explanation below are wrong as written. The corrected points are marked inline; the finding and #165 stand on
+> the hypothetical, not on an incident.
+
 Seventh in the review series (`2026-08-06-staff-engineer-review.md`,
 `2026-08-09-staff-engineer-review.md`,
 `2026-08-09-hardware-constrained-strategy.md`,
@@ -45,7 +51,7 @@ for three nights running. The engineering inside a change is good.
 
 What is weak is **everything between changes**: the order in which PRs
 reach the cluster, the pipeline that should deliver dependency updates,
-the signal that should say "the node has been gone for a month", and the
+the signal that would say "the node has been gone for a month" if it went dark unintentionally, and the
 written record of what is true. Each of the top five findings below is a
 seam between two things that each work on their own. That is the expected
 failure shape of a project built by many short, well-behaved agent
@@ -89,10 +95,10 @@ M19.
   minute apart without anyone checking that the second needed an image
   built by the first. New item **#163**.
 
-### 2.2 A month-long outage that nothing reported, and the 30-day history is gone — P1, verified
+### 2.2 No signal when the cluster goes dark, and the 30-day history is gone — P1, verified (corrected 2026-10-10: the 33 days were a deliberate power-off, not an outage)
 
 - `SESSION_STATE.md:150` records "NucBox offline 33 days, Tailscale node key
-  expired post-cutover". Nothing paged: Alertmanager's only receiver is a
+  expired post-cutover". **The owner powered the node off on purpose, so nothing was supposed to page; the point is that nothing would have paged had it been accidental:** Alertmanager's only receiver is a
   webhook to `ntfy.sh` (`platform/argocd/apps/prometheus.yaml:118-142`),
   reached over the same Wi-Fi uplink, and there is no Watchdog/dead-man's
   switch (`ALERTS{alertname="Watchdog"}` is empty; 25 rules, none
@@ -101,15 +107,16 @@ M19.
   `argo-rollouts` 3187, `cert-manager-cainjector` 3161,
   `kube-state-metrics` 3142 restarts on 40-day-old pods
   (`kubectl get pods -A`), with Prometheus showing almost none of them
-  inside the last 7 days. I believe these accumulated while the node was up
-  without a usable network, but the cause is **not verified** (the last
-  terminated reason is `Unknown`, exit 255).
+  inside the last 7 days. The cause is **not verified** (the last terminated
+  reason is `Unknown`, exit 255). The earlier guess that they came from a dark period was wrong: a node that is
+  powered off accumulates no restarts.
 - **The asset ADR 0045 made a hard precondition is gone.**
   `prometheus_tsdb_lowest_timestamp_seconds` = 2026-10-03T16:09Z;
   `count(count_over_time(up[1d] offset 7d))` returns nothing, and Mimir
   returns nothing past 6 days either. The August history that #153/#154
   carried across with a careful PVC copy aged out under the 30-day
-  retention while the node was dark. #94's SLO-over-time report was never
+  retention while the node was powered off (a 33-day gap outlasts a 30-day retention, so this was an expected
+  cost of the shutdown, not a fault). #94's SLO-over-time report was never
   written and now cannot be written from that window. This is the single
   most expensive consequence of having no off-box liveness signal.
 - New items **#165** (off-box dead-man's switch) and **#166** (alerts on
@@ -316,8 +323,8 @@ What does not. Three patterns, all visible in this review's evidence:
 
 1. **Sessions own tasks, nobody owns joints.** #163 is two correct PRs in
    the wrong order. #164 is a Renovate workflow that has looked fine for
-   six weeks because nothing ever failed. The 33-day outage was noticed
-   by a human trying to connect, not by the system.
+   six weeks because nothing ever failed. The 33 days were a deliberate
+   power-off; had it been accidental, nothing would have reported it.
 2. **Prose grows faster than state changes.** `backlog.md` is 1,544 lines
    for 162 items; single items run to 1,500 words of narrative
    (#49, #50, #94). `SESSION_STATE.md` is 488 lines against a rule that it
