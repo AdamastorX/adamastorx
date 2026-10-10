@@ -1649,13 +1649,13 @@ The owner asked on 2026-10-10 for attractive, simple dashboards for the SLOs, th
 - Purpose: compute each declared SLO once, in Prometheus, so the dashboard and the alert read the same numbers. Repo: platform (`serverFiles["recording_rules.yml"]` in `argocd/apps/prometheus.yaml`), observability (CI).
 - Acceptance Criteria: (1) One rule group labelled by `slo` and `service` records `slo:good:increase7d`, `slo:valid:increase7d`, `slo:objective:ratio` (a constant, the one place the target lives), `slo:compliance:ratio7d` (with the minimum-events guard) and `slo:error_budget_remaining:ratio7d`. (2) observability CI runs `promtool check rules` and a `promtool test rules` unit test on the recording rules, including a guard case (too few events returns nothing) and a breach case. (3) Live: `slo:compliance:ratio7d` returns one series per measurable SLO and matches a hand-run ratio to 4 decimals; the guard returns nothing for `sentiment-scoring`. (4) The 28d siblings are added on or after 2026-10-31, not before.
 - Dependencies: #182.
-- Priority: P0. Labels: `observability`, `platform`. Open.
+- Priority: P0. Labels: `observability`, `platform`. **Done (2026-10-10, platform#241, observability#44)**: 7 SLOs recorded on a 7d window; the 28d siblings are still due from ~2026-10-31.
 
 **178. SLO table dashboard (replaces the per-system dashboards #178/#179)**
 - Purpose: one table with one row per declared SLO: name, objective, window, events in the window, current SLI (5m), compliance, error budget remaining, status (Met, At risk, Breached, Insufficient events). Repo: platform.
 - Acceptance Criteria: (1) Built only from `slo:*` series (a CI check fails otherwise). (2) Every row shows its objective, window and budget; low-traffic rows show "Insufficient events", dormant SLOs are listed as dormant with the reason. (3) The header counts SLOs from `slo:error_budget_remaining`, not tiles. (4) Replaces `SLO Overview`'s SLO tiles; viewed on the live Grafana and accepted by the owner.
 - Dependencies: #177.
-- Priority: P0. Labels: `observability`, `dashboard`. Open.
+- Priority: P0. Labels: `observability`, `dashboard`. **Done (2026-10-10, platform#242)**: owner accepted the SLO table.
 
 **179. ~~Market-data pipeline SLO dashboard~~ — CLOSED, merged into #178 (one SLO table, not one dashboard per system)**
 
@@ -1688,3 +1688,9 @@ The owner asked on 2026-10-10 for attractive, simple dashboards for the SLOs, th
 - Acceptance Criteria: (1) Either the series exists for `job="workers"` after one consumed message, or the alert, its runbook and its tile are removed with the reason recorded. (2) A `promtool test rules` case proves the alert fires on a synthetic error series, if kept.
 - Dependencies: none.
 - Priority: P1. Labels: `observability`, `backend`. Open.
+
+**186. Services overview and Infrastructure overview dashboards (informative, not status)**
+- Purpose: the SLO table says whether targets are met and Service health says whether signals are healthy, but neither shows what is running or how loaded it is. Two informative dashboards, requested by the owner on 2026-10-10. Repo: platform.
+- Acceptance Criteria: (1) `Infrastructure overview`: CPU, memory and disk gauges, load, uptime, pods, CPU/memory/swap and disk I/O trends, the Wi-Fi link's throughput and carrier changes, pods per namespace, ArgoCD synced/healthy counts, certificate expiry, ingress rate, restarts. (2) `Services overview`: pods running/not ready, deployments not available, restarts, requests and 5xx, a per-namespace table (pods, restarts, CPU, memory, memory vs limits), request rate and p95 by service, CPU/memory by namespace, JVM heap, Kafka lag. (3) Every panel returns data on the live Prometheus; panels for metrics that do not exist (Kafka, PostgreSQL and Redis exporters) are not shown. (4) Reviewed on the live Grafana by the owner; timeseries render (the earlier styled ones did not).
+- Dependencies: none.
+- Priority: P0. Labels: `observability`, `dashboard`. **Delivered (2026-10-10, platform#243), awaiting the owner's visual check.**
