@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 860" font-family="Helvetica, Arial, sans-serif">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker></defs>
+<rect width="1600" height="860" fill="#ffffff"/>
+<text x="40" y="62" font-size="30" font-weight="700" fill="#0f172a">Four repositories</text>
+<text x="1000" y="62" font-size="30" font-weight="700" fill="#0f172a">One cluster</text>
+<rect x="40" y="110" width="420" height="150" rx="14" fill="#fff7ed" stroke="#ea580c" stroke-width="2.5"/><text x="62" y="150" font-size="27" font-weight="700" fill="#0f172a">adamastorx</text><text x="62" y="184" font-size="20" fill="#334155">Decisions and plan</text><text x="62" y="212" font-size="20" fill="#334155">ADRs · backlog · reviews · agent roles</text><text x="62" y="240" font-size="20" fill="#334155">(not deployed: it guides the work)</text>
+<rect x="40" y="290" width="420" height="150" rx="14" fill="#e0f2fe" stroke="#0284c7" stroke-width="2.5"/><text x="62" y="330" font-size="27" font-weight="700" fill="#0f172a">platform</text><text x="62" y="364" font-size="20" fill="#334155">Infrastructure and deployment</text><text x="62" y="392" font-size="20" fill="#334155">Terraform · Kubernetes · ArgoCD apps · CI</text><text x="62" y="420" font-size="20" fill="#334155">(also holds alert rules and dashboards)</text>
+<rect x="40" y="470" width="420" height="150" rx="14" fill="#dcfce7" stroke="#16a34a" stroke-width="2.5"/><text x="62" y="510" font-size="27" font-weight="700" fill="#0f172a">services</text><text x="62" y="544" font-size="20" fill="#334155">The applications</text><text x="62" y="572" font-size="20" fill="#334155">11 services · Java and Python</text><text x="62" y="600" font-size="20" fill="#334155">built into container images by CI</text>
+<rect x="40" y="650" width="420" height="150" rx="14" fill="#f3e8ff" stroke="#9333ea" stroke-width="2.5"/><text x="62" y="690" font-size="27" font-weight="700" fill="#0f172a">observability</text><text x="62" y="724" font-size="20" fill="#334155">Telemetry practice</text><text x="62" y="752" font-size="20" fill="#334155">runbooks · rule tests · OTel config</text><text x="62" y="780" font-size="20" fill="#334155">the SRE agent</text>
+<rect x="600" y="320" width="270" height="90" rx="14" fill="#f1f5f9" stroke="#64748b" stroke-width="2.5"/>
+<text x="620" y="356" font-size="25" font-weight="700" fill="#0f172a">ArgoCD</text><text x="620" y="388" font-size="19" fill="#334155">watches only this repo</text>
+<rect x="600" y="500" width="270" height="90" rx="14" fill="#f1f5f9" stroke="#64748b" stroke-width="2.5"/>
+<text x="620" y="536" font-size="25" font-weight="700" fill="#0f172a">Image registry</text><text x="620" y="568" font-size="19" fill="#334155">one image per commit</text>
+<line x1="462" y1="365" x2="598" y2="365" stroke="#475569" stroke-width="4" marker-end="url(#a)"/>
+<line x1="462" y1="545" x2="598" y2="545" stroke="#475569" stroke-width="4" marker-end="url(#a)"/>
+<line x1="872" y1="365" x2="998" y2="365" stroke="#475569" stroke-width="5" marker-end="url(#a)"/>
+<line x1="872" y1="545" x2="998" y2="545" stroke="#475569" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#a)"/>
+<text x="735" y="460" font-size="18" fill="#475569" text-anchor="middle">the cluster follows git</text>
+<text x="735" y="640" font-size="18" fill="#475569" text-anchor="middle">pulled by tag</text>
+<rect x="1000" y="90" width="560" height="720" rx="18" fill="#f8fafc" stroke="#94a3b8" stroke-width="3"/>
+<rect x="1030" y="130" width="500" height="150" rx="14" fill="#e0f2fe" stroke="#0284c7" stroke-width="2.5"/>
+<text x="1052" y="172" font-size="27" font-weight="700" fill="#0f172a">Platform</text>
+<text x="1052" y="212" font-size="21" fill="#334155">k3s · Cilium · Traefik</text>
+<text x="1052" y="242" font-size="21" fill="#334155">cert-manager · ArgoCD</text>
+<rect x="1030" y="300" width="500" height="150" rx="14" fill="#fef3c7" stroke="#d97706" stroke-width="2.5"/>
+<text x="1052" y="342" font-size="27" font-weight="700" fill="#0f172a">Data and messaging</text>
+<text x="1052" y="382" font-size="21" fill="#334155">Kafka · PostgreSQL · Redis</text>
+<rect x="1030" y="470" width="500" height="150" rx="14" fill="#dcfce7" stroke="#16a34a" stroke-width="2.5"/>
+<text x="1052" y="512" font-size="27" font-weight="700" fill="#0f172a">Applications</text>
+<text x="1052" y="552" font-size="21" fill="#334155">ClinVar variant lookup</text>
+<text x="1052" y="582" font-size="21" fill="#334155">Market-data pipeline</text>
+<rect x="1030" y="640" width="500" height="150" rx="14" fill="#f3e8ff" stroke="#9333ea" stroke-width="2.5"/>
+<text x="1052" y="682" font-size="27" font-weight="700" fill="#0f172a">Observability</text>
+<text x="1052" y="722" font-size="21" fill="#334155">metrics · logs · traces</text>
+<text x="1052" y="752" font-size="21" fill="#334155">profiles · alerts · SLOs</text>
+<text x="40" y="838" font-size="18" fill="#64748b">The applications are a vehicle: they exist to generate traffic and real distributed-systems problems to observe.</text>
+</svg>

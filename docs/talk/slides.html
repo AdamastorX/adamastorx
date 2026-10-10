@@ -26,6 +26,11 @@
   .card { background:var(--card); border-radius:10px; padding:1em 1.2em; }
   .big { font-size:3em; font-weight:700; color:var(--acc); line-height:1; }
   .bad { color:var(--bad); } .ok { color:var(--ok); }
+  .split { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr); font-size:.82em; gap:3vw; align-items:center; }
+  .split.tall { grid-template-columns:minmax(0,1fr) minmax(0,1.3fr); }
+  .split img { width:100%; max-height:78vh; object-fit:contain; border-radius:10px; background:#0b1220; align-self:center; justify-self:center; }
+  .split.tall img { width:auto; max-width:100%; }
+  @media (max-width:800px) { .split, .split.tall { grid-template-columns:1fr; } }
   .notes { display:none; position:fixed; left:0; right:0; bottom:0; max-height:34vh; overflow:auto;
     background:#020617f2; border-top:2px solid var(--acc); padding:1em 6vw; font-size:.7em; color:#cbd5e1; z-index:5; }
   body.showNotes .notes.on { display:block; }
@@ -226,6 +231,50 @@
     <li>A green gate can still mean a wrong system: the answer is business-path checks (#123)</li>
   </ul>
   <div class="notes">Showing the gaps makes the talk more credible than the gate list alone. Sources: gh api branches/main/protection, backlog #126 and #123.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part D · Demo</div>
+  <h2>The infrastructure, on one screen</h2>
+  <div class="split">
+    <img src="img/grafana-infrastructure-overview.png" alt="Grafana Infrastructure overview dashboard">
+    <ul>
+      <li><b>One mini PC:</b> CPU 7%, memory 20%, disk 20%, 51 pods running</li>
+      <li><b>The Wi-Fi link</b> is on the dashboard: throughput and carrier drops</li>
+      <li><b>GitOps state:</b> 46 apps synced, 47 healthy, 1 not healthy</li>
+      <li class="mute">Values at the time of the screenshot</li>
+    </ul>
+  </div>
+  <div class="notes">Grafana, "Infrastructure overview". Gauges turn amber at 70% and red at 90%. Point at the Wi-Fi panels: the cluster runs on a USB Wi-Fi dongle, so link drops are a first-class signal. The amber "apps out of sync / not healthy" tiles are real: one app is Degraded and one manual-sync app is intentionally out of sync. Source: the generator in platform/scripts/gen-slo-dashboards.py.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part D · Demo</div>
+  <h2>The services: what is running and how loaded</h2>
+  <div class="split">
+    <img src="img/grafana-services-overview.png" alt="Grafana Services overview dashboard">
+    <ul>
+      <li><b>51 pods</b> running, none unready, none restarting at the moment this was taken</li>
+      <li><b>Memory against limits</b> per row: Kafka is the biggest consumer; Prometheus at 79% of its limit is the one to watch</li>
+      <li>Requests and p95 latency per service underneath</li>
+    </ul>
+  </div>
+  <div class="notes">Grafana, "Services overview". The table in this capture groups by namespace; it has since been changed to one row per workload, so re-capture before presenting. Traffic is deliberately low (the applications exist to generate load and failure modes, not users), so the request panels are quiet.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part D · Demo</div>
+  <h2>The network: who talks to whom</h2>
+  <div class="split tall">
+    <img src="img/hubble-namespace-api.png" alt="Hubble service map of the api namespace">
+    <ul>
+      <li><b>Inside the namespace:</b> the API, its PostgreSQL and its Redis</li>
+      <li><b>Outside it:</b> Kafka, Pyroscope, the OpenTelemetry collector, Prometheus, Traefik</li>
+      <li>A namespace is a <b>home</b>, not a service: the map shows traffic, not ownership</li>
+      <li class="mute">Cilium + Hubble (eBPF), network policies decide what is allowed</li>
+    </ul>
+  </div>
+  <div class="notes">Hubble UI shows one namespace at a time; the peers around it are other namespaces. The API is the right example because it has network policies (api, postgresql, redis and a Pyroscope-egress policy), so the picture matches what is allowed. 21 other namespaces have no policy yet (backlog #168). For the data flow of the market pipeline use the event-flows diagram; Hubble shows connections, not Kafka topics.</div>
 </section>
 
 <section class="slide">
