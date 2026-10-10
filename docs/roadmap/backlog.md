@@ -1663,13 +1663,13 @@ The owner asked on 2026-10-10 for attractive, simple dashboards for the SLOs, th
 - Purpose: consumer lag, DLQ depth, market feed liveness, disk, Kafka reachability, failing probes, ArgoCD sync, backup age, telemetry backends, restarting workloads and scrape targets are health and saturation signals, not SLOs. They keep a tile view (the current `SLO Overview` grid) under an honest name. Repo: platform.
 - Acceptance Criteria: (1) The current tile grid, minus the SLO tiles, renamed `Service health`, with no panel titled or described as an SLO. (2) Each tile names its alert or says there is none. (3) The tile counters count healthy and unhealthy, not "SLOs". (4) The preliminary-threshold tiles stay labelled preliminary.
 - Dependencies: none.
-- Priority: P0. Labels: `observability`, `dashboard`. Open.
+- Priority: P0. Labels: `observability`, `dashboard`. **Done (2026-10-10, platform#242)**: the owner reviewed it live together with the SLO table.
 
 **181. SLO table as the Grafana home, one budget alert, and parity by construction**
 - Purpose: make the table the entry point and keep the dashboard and the alert from disagreeing. Repo: platform, observability.
 - Acceptance Criteria: (1) Grafana's home dashboard is the SLO table, with `Service health` and the Golden Signals one click away. (2) One alert, `SLOErrorBudgetExhausted` (`slo:error_budget_remaining:ratio7d < 0`, warning), reads the same series as the table, with a runbook in `observability/runbooks/`. (3) A CI check fails if a query in an SLO dashboard does not start from `slo:`. (4) `docs/architecture/` and the observability README describe the set.
 - Dependencies: #178, #180.
-- Priority: P0. Labels: `observability`, `dashboard`. Open.
+- Priority: P0. Labels: `observability`, `dashboard`. **Done (2026-10-10, platform#244, observability#45/#46)**: the SLO table is the Grafana home; `SLOErrorBudgetExhausted` (budget < 0 for 1h) reads the same `slo:*` series, with a runbook and a unit test; the generator fails CI if the SLOs dashboard reads anything but `slo:*`.
 
 **183. Synthetic traffic for `GET /variants/lookup`**
 - Purpose: the headline path has had zero requests in six days, so `variants-lookup` is dormant. A low-rate synthetic probe gives it a measurable SLI without inventing a ratio. Repo: platform, observability.
@@ -1693,4 +1693,4 @@ The owner asked on 2026-10-10 for attractive, simple dashboards for the SLOs, th
 - Purpose: the SLO table says whether targets are met and Service health says whether signals are healthy, but neither shows what is running or how loaded it is. Two informative dashboards, requested by the owner on 2026-10-10. Repo: platform.
 - Acceptance Criteria: (1) `Infrastructure overview`: CPU, memory and disk gauges, load, uptime, pods, CPU/memory/swap and disk I/O trends, the Wi-Fi link's throughput and carrier changes, pods per namespace, ArgoCD synced/healthy counts, certificate expiry, ingress rate, restarts. (2) `Services overview`: pods running/not ready, deployments not available, restarts, requests and 5xx, a per-namespace table (pods, restarts, CPU, memory, memory vs limits), request rate and p95 by service, CPU/memory by namespace, JVM heap, Kafka lag. (3) Every panel returns data on the live Prometheus; panels for metrics that do not exist (Kafka, PostgreSQL and Redis exporters) are not shown. (4) Reviewed on the live Grafana by the owner; timeseries render (the earlier styled ones did not).
 - Dependencies: none.
-- Priority: P0. Labels: `observability`, `dashboard`. **Delivered (2026-10-10, platform#243), awaiting the owner's visual check.**
+- Priority: P0. Labels: `observability`, `dashboard`. **Done (2026-10-10, platform#243)**: reviewed live by the owner.
