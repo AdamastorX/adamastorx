@@ -31,6 +31,7 @@ state.
 | **M17 Close the Blind Spots: Harden and Self-Monitor** | Close the debt the project's own tooling can't see (2026-08-21 full audit, ADR 0044) — application-workload security hardening (`securityContext`), the observability stack's own-backend blind spots and the alert already crying wolf, and the record-keeping drift the doc-drift automation doesn't catch — plus the first Claude Code hooks/skills that turn trust-based safety rules and re-read procedures into enforced, loadable ones. Zero new always-on runtime components (the M16/ADR 0043 discipline, continued). |
 | **M18 Operate on Wi-Fi: No Silent Failures** | The NucBox stays on Wi-Fi (owner decision, 2026-10-09), so the cluster must tolerate and report that link: fix the Degraded `api` rollout and the merge-order gap behind it (#163), make Renovate PRs run CI (#164), page from outside the house when the cluster goes dark (#165), alert on the uplink and the API server (#166), reframed #162, then the record and security debt the 2026-10-09 review found (#167-#170). One new external dependency (a heartbeat service), no new in-cluster component. |
 | **M19 Two-Node Substrate: the T460s Joins** | The original host returns as a tainted agent (ADR 0047): pre-join clean slate (#171), scheduling guardrails (#172), Cilium and policies correct on two nodes (#173), a pinned, rehearsed Terraform join (#174), requests sized for split capacity (#175), an off-node backup copy (#176); then #51/#52 finally run. |
+| **M20 SLO Dashboards: Readable at a Glance** | Owner priority (2026-10-10). A short set of one-screen, status-first dashboards for the SLOs that already exist (ADR 0020): the ClinVar application path (#178), the market-data pipeline (#179) and the infrastructure (#180), built to one standard (#177) and made the Grafana entry point (#181). The detail dashboards stay. No new alert rules, no new component. |
 
 M6–M9 are the expansion phase (ADR 0022). The goal changed — breadth and
 novelty, on top of the tight core ADR 0021 produced — and ADR 0022 states
@@ -188,3 +189,10 @@ go dark for a month unnoticed doubles what can go dark. Within M19 the
 order is strict: #171 → #172 and #173 → #174 → #175/#176, then #51 and #52,
 whose dependency on the superseded #48 now points at #174. The relaxed
 sequencing rule above still applies to everything else.
+
+**M20 (2026-10-10) is an owner priority override.** Asked for after the
+2026-10-09 review: the existing Golden Signals dashboards are too complex to
+read at a glance, so M20 adds five P0 items (#177-#181) that start now. It
+touches only Grafana's Helm values in `platform`, so it does not wait for M18;
+#163 still goes first on the `api` Rollout, and M19's gate (#163, #165) is
+unchanged.

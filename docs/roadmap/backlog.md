@@ -1634,3 +1634,37 @@ The owner decided on 2026-10-09 that the Lenovo T460s (the original host until #
 - Acceptance Criteria: (1) each night's dumps and the Terraform state copied to the T460s (method recorded); retention stated. (2) One database restored from the T460s copy with the RTO measured, per #23a's method. (3) A failed copy fires an alert with a runbook. (4) #99's text updated to say what remains (off-site only).
 - Dependencies: #172, #174.
 - Priority: P2. Labels: `platform`. Open.
+
+## M20 SLO Dashboards: Readable at a Glance (owner priority, 2026-10-10)
+
+The owner asked on 2026-10-10 for attractive, simple dashboards for the SLOs that already exist (ADR 0020), for the two application systems (the ClinVar variant-lookup path and the market-data pipeline) and for the infrastructure, because the current dashboards are hard to read: `platform/argocd/apps/grafana.yaml` carries per-service "Golden Signals" dashboards with roughly 60 timeseries and stat panels in all (grep count, 2026-10-10). This milestone adds a small set of one-screen SLO views on top of them; it does not delete or rewrite the detail dashboards. All five items are P0 by owner decision and start now. They touch only Grafana's Helm values, so they run alongside M18; #163 still goes first on the `api` Rollout. No new alert rules and no new component: the views show SLIs, thresholds and alerts that already exist.
+
+**177. SLO dashboard standard: one screen, status first, plus a shared layout**
+- Purpose: the existing dashboards show raw signals (rates, quantiles, heap) and make the reader work out whether anything is wrong. An SLO view answers one question per row, "is this meeting its target right now?". Repo: platform (dashboard JSON in `argocd/apps/grafana.yaml`), observability (`grafana/dashboards/README.md` for the design note).
+- Acceptance Criteria: (1) A written standard (README section): one row per SLO, a stat tile for the current SLI against its ADR 0020 threshold coloured green/amber/red, a small trend beside it, at most 8 panels visible without scrolling at 1920x1080, plain-language titles and units, the same colours and layout on every SLO dashboard. (2) The window is stated honestly: the error-budget or "over the window" figure uses only the retention that exists (Prometheus 3 days, Mimir about 6 days per the 2026-10-09 review); no 28 or 30-day claim until #94's window has closed. (3) One reference dashboard built to the standard for a single service, viewed on the live Grafana and confirmed readable by the owner. (4) Each tile's query is the same expression as the corresponding alert rule, so the dashboard cannot disagree with the alert.
+- Dependencies: none.
+- Priority: P0. Labels: `observability`, `dashboard`. Open.
+
+**178. ClinVar application SLO dashboard (gateway, api, workers, clinvar-service, watchlist-service)**
+- Purpose: one view of whether the variant-lookup path is healthy, built from ADR 0020's rows for `gateway`, `api` (including `GET /variants/lookup`), `workers` (consumer lag), `clinvar-service` (lookup success and ingestion freshness) and `watchlist-service` (delivery success). Repo: platform.
+- Acceptance Criteria: (1) A dashboard built to #177's standard with one row per SLO listed above, each tile showing the current SLI against its threshold. (2) A service that is down or has no data shows a distinct "no data" state, not green. (3) Each row links to the existing Golden Signals dashboard for drill-down. (4) Verified on the live Grafana with real data, with a screenshot saved under `docs/`; any SLO whose metric turns out not to exist is listed as a finding, not hidden.
+- Dependencies: #177.
+- Priority: P0. Labels: `observability`, `dashboard`. Open.
+
+**179. Market-data pipeline SLO dashboard (market-data-ingestor, news-ingestor, sentiment-analyzer, aggregator, end-to-end freshness)**
+- Purpose: the second application system: tick publish success, feed poll success, sentiment consume/publish success, `aggregator` availability, and the pipeline freshness SLO (`aggregator_price_freshness_seconds`, websocket ticks only, ADR 0020). Repo: platform.
+- Acceptance Criteria: (1) A dashboard built to #177's standard with one row per SLO above. (2) The freshness tile filters to the websocket series by construction, as the alert does, and shows when the market is closed so a quiet pipeline outside trading hours is not shown as an incident. (3) "No data" is distinct from green. (4) Verified live with a screenshot, as in #178.
+- Dependencies: #177.
+- Priority: P0. Labels: `observability`, `dashboard`. Open.
+
+**180. Infrastructure dashboard: node, API server, Kafka, PostgreSQL, ArgoCD, backups**
+- Purpose: a single health view of the platform the applications run on, for a single-node cluster on Wi-Fi: node CPU, memory and disk, k3s API-server reachability, Kafka and Postgres health, ArgoCD sync and health per Application, pod restarts and OOM kills, last successful backup per database. Repo: platform.
+- Acceptance Criteria: (1) A dashboard built to #177's standard where each tile is a status with a threshold, not a raw graph. (2) Uses only metrics that exist today; the uplink and leader-election panels are added when #166 ships, and the dashboard says so rather than showing empty tiles. (3) Backup tile reads the real CronJob success time. (4) Verified live with a screenshot.
+- Dependencies: #177.
+- Priority: P0. Labels: `observability`, `dashboard`. Open.
+
+**181. Make the SLO views the entry point, and say how they are kept honest**
+- Purpose: a dashboard nobody opens decays. Make the three views what Grafana shows first, keep the detail dashboards one click away, and add the check that stops them drifting from the alerts. Repo: platform, observability.
+- Acceptance Criteria: (1) Grafana's home dashboard is the SLO overview linking #178, #179 and #180; existing detail dashboards remain, linked from each row. (2) A CI check or a documented query-parity test fails if a tile's expression differs from its alert rule's (extends the existing `prometheus-rules` checks in observability). (3) `docs/architecture/` and the observability README describe the dashboard set. (4) The owner reviews the live result and decides whether any detail dashboard is retired.
+- Dependencies: #178, #179, #180.
+- Priority: P0. Labels: `observability`, `dashboard`. Open.
