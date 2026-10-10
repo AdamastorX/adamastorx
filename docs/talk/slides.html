@@ -41,229 +41,222 @@
 <body>
 
 <section class="slide">
-  <div class="kicker">AdamastorX · homelab platform · 12 weeks</div>
-  <h1>Building with AI agents:<br>the loop, what went wrong, and the gates</h1>
-  <p class="mute">One owner, four repos, one single-node Kubernetes cluster.</p>
-  <div class="notes">Opening. Everything here is about one project with one owner. It is an observation, not a benchmark. Every claim in the deck has a source in the repo.</div>
+  <div class="kicker">AdamastorX · a homelab on old hardware</div>
+  <h1>Building a platform with AI agents:<br>what worked, what broke</h1>
+  <p class="mute">One person, four repositories, one small Kubernetes cluster, twelve weeks.</p>
+  <div class="notes">Audience: engineering students, some senior developers and professors. Everything here is one project with one owner: an observation, not a benchmark. Every number on the slides has a source in the repository; the file docs/talk/slides-ai-development-loop.md lists them.</div>
 </section>
 
 <section class="slide">
-  <div class="kicker">Part A · how the work flows</div>
+  <div class="kicker">Part A · the lab</div>
+  <h2>A homelab built from old hardware</h2>
+  <div class="cols">
+    <div class="card"><b>Why</b><ul>
+      <li>Use hardware I already had</li>
+      <li>No cloud budget</li>
+      <li>Find out where old hardware breaks</li></ul></div>
+    <div class="card"><b>Two experiments in one</b><ul>
+      <li>Run a real platform: Kubernetes, GitOps, Kafka, PostgreSQL, observability</li>
+      <li>Find out what AI can actually do in building and running it</li></ul></div>
+  </div>
+  <p><b>Where it started:</b> a 10-year-old ThinkPad laptop running Xubuntu, also my daily machine.</p>
+  <div class="notes">A constraint as a learning tool. Define 'cluster' in one sentence for the students before using the word. The laptop was an i7-6600U with 2 physical cores, 4 threads and about 19 GiB of RAM. Evidence that I found its limits: with about 30 components its CPU requests reached 93% of what Kubernetes could allocate, and 5.1 GiB of swap was in use (docs/reviews/2026-08-09-hardware-constrained-strategy.md). Those limits drove real decisions.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part A · the lab</div>
+  <h2>One node per machine, not virtual machines</h2>
+  <div class="cols">
+    <div class="card"><b>The laptop (2016)</b><br>i7-6600U · 2 cores, 4 threads<br>about 19 GiB RAM<br><span class="mute">Plan A: simulate several nodes with VMs. Measured: it did not fit.</span></div>
+    <div class="card"><b>A dedicated mini PC</b><br>Ryzen 7 8845HS · 16 threads<br>58 GiB RAM · 1 TB NVMe<br><span class="mute">Room to run the real thing.</span></div>
+  </div>
+  <ul>
+    <li>Even where VMs would fit, they hide what makes clusters hard: unequal hardware, a real network between nodes, real failure modes</li>
+    <li>So: one node per physical machine, the old laptop to return later as the second node</li>
+  </ul>
+  <div class="notes">ADR 0035 planned interim VMs on the laptop; the measurement falsified it (no VM agent ever fit that machine), so the plan was superseded. The reason for separate physical nodes is a design choice: it is closer to how a cluster is really managed. Do not say the second node is running: it is a next step.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part A · the lab</div>
+  <h2>My setup: a cluster I can reach from anywhere</h2>
+  <div class="split">
+    <img src="access-setup.svg" alt="Access setup: any laptop, Tailscale, the cluster" style="background:#fff;padding:8px">
+    <ul>
+      <li><b>Tailscale</b> gives me a private network: I reach the cluster from any of my machines, nothing is open to the internet</li>
+      <li><b>One hosts-file entry</b> maps 11 names to the cluster; no DNS server to run</li>
+      <li><b>kubectl, ArgoCD, Grafana, Prometheus</b> and the service UIs are all behind it</li>
+    </ul>
+  </div>
+  <div class="notes">Drawn as the setup at the start, with the laptop as the host. A new machine needs three things: Tailscale login, the hosts-file lines, and trust in the internal certificate authority (plus a kubeconfig for kubectl). Why a hosts file instead of DNS: .test is a reserved name that never resolves publicly; MagicDNS only gives machine names; a real DNS server is one more component to operate, and a real domain costs money. The price is manual maintenance, reasonable for 11 names. Anecdote: for a while the host's IP was hardcoded and that caused trouble installing Cilium.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part A · the lab</div>
+  <h2>Moving to real hardware</h2>
+  <ul>
+    <li>The platform moved off the laptop to a dedicated mini PC (Ryzen 7, 58 GiB RAM, 1 TB NVMe)</li>
+    <li><b>Rehearsed first:</b> a restore drill with measured recovery times, then the cutover on 30-31 August</li>
+    <li><b>Described in git:</b> the new host came up from Terraform and ArgoCD, and the data was copied across</li>
+    <li>Same setup, same hostnames, new machine</li>
+  </ul>
+  <p class="mute">Next: the old laptop comes back as a second node.</p>
+  <div class="notes">DRAFT built from the repository (ADR 0045, backlog #153-#155, platform/docs/runbooks/hardware-migration-drill.md): please check wording with the owner. The migration is the story of 'the same configuration moved machines because it lives in git'. The restore drill measured recovery times for the databases; the whole-drill wall-clock was not recorded.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part B · the project</div>
+  <h2>Four repositories, one cluster</h2>
+  <div class="split">
+    <img src="repos-and-cluster.svg" alt="Four repositories feeding one cluster" style="background:#fff;padding:8px">
+    <ul>
+      <li>Each repository has one job: decisions, infrastructure, applications, telemetry practice</li>
+      <li><b>ArgoCD watches one repository</b>; code reaches the cluster through an image tag committed there</li>
+      <li>The applications are a vehicle: they generate traffic and real distributed-systems problems</li>
+    </ul>
+  </div>
+  <div class="notes">adamastorx holds the ADRs, backlog, reviews and the agent roles; platform holds Terraform, Kubernetes manifests, ArgoCD apps, CI, the alert rules and dashboards; services holds 11 applications in Java and Python; observability holds runbooks, rule tests, OTel config and the SRE agent. 33 namespaces and 48 ArgoCD applications today. A known cost of this split: the image tag is chosen in a different repository from the code, which caused a deployment that was left degraded. Automating that promotion is a planned improvement after this talk.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part B · the project</div>
+  <h2>Real workloads to produce real problems</h2>
+  <div class="cols">
+    <div class="card"><b>ClinVar variant lookup</b><ul>
+      <li>An API looks up genetic variants and caches the answers</li>
+      <li>A Python service ingests the public ClinVar data and tells the cache what changed</li></ul></div>
+    <div class="card"><b>Market-data pipeline</b><ul>
+      <li>Live trades and news feeds into Kafka</li>
+      <li>Sentiment is scored, joined with prices per ticker, and shown in a viewer</li></ul></div>
+  </div>
+  <p><b>Stack:</b> k3s, Cilium, ArgoCD, Argo Rollouts, KEDA, Traefik, cert-manager · Kafka, PostgreSQL, Redis · Prometheus, Grafana, Loki, Tempo, Pyroscope, OpenTelemetry</p>
+  <div class="notes">The product is irrelevant: it exists so Kafka, caches and databases do real work and I can observe what goes wrong in distributed systems. Maturity of the product is not a priority. The technology list is deliberately grouped: infrastructure, data and messaging, observability. A story worth telling: Cilium started on the project's exclusion list and was adopted later with an ADR; Vault, Crossplane and Backstage remain excluded.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part C · how I work with AI</div>
   <h2>The loop</h2>
   <img class="fig" src="ai-development-loop.svg" alt="The AI development loop">
-  <div class="notes">Walk top to bottom and point at the three orange boxes: the human sets direction, the human reviews and merges, the human answers the alert. Agents work in the middle. Nothing merges itself, whoever wrote it. Source: .claude/WORKFLOW.md.</div>
+  <div class="notes">Walk top to bottom and point at the three orange boxes: I set the direction, I review and merge, I answer the alert. Agents work in the middle. Source: .claude/WORKFLOW.md.</div>
 </section>
 
 <section class="slide">
-  <div class="kicker">Roles</div>
-  <h2>Five personas, least privilege</h2>
+  <div class="kicker">Part C · how I work with AI</div>
+  <h2>Roles: five agents with different powers</h2>
   <table>
-    <tr><th>Persona</th><th>Owns</th><th>Tools</th></tr>
-    <tr><td><code>architect</code></td><td>design calls, ADRs</td><td>Read, Grep, Glob, Write. No Edit, no Bash</td></tr>
-    <tr><td><code>platform-engineer</code></td><td>Terraform, Helm, ArgoCD, CI</td><td>+ Edit, Bash</td></tr>
-    <tr><td><code>backend-engineer</code></td><td>Spring Boot, Kafka, Redis, Postgres</td><td>+ Edit, Bash</td></tr>
-    <tr><td><code>observability-engineer</code></td><td>telemetry, dashboards, alerts, SLOs</td><td>+ Edit, Bash</td></tr>
-    <tr><td><code>documentation-engineer</code></td><td>READMEs, ADRs after a merge</td><td>no Bash</td></tr>
+    <tr><th>Agent</th><th>Owns</th><th>Tools</th></tr>
+    <tr><td><code>architect</code></td><td>design decisions, ADRs</td><td>read and write documents; no code editing, no shell</td></tr>
+    <tr><td><code>platform-engineer</code></td><td>Terraform, Helm, ArgoCD, CI</td><td>edit and shell</td></tr>
+    <tr><td><code>backend-engineer</code></td><td>Spring Boot, Kafka, Redis, Postgres</td><td>edit and shell</td></tr>
+    <tr><td><code>observability-engineer</code></td><td>telemetry, dashboards, alerts, SLOs</td><td>edit and shell</td></tr>
+    <tr><td><code>documentation-engineer</code></td><td>READMEs, ADRs after a merge</td><td>no shell</td></tr>
   </table>
-  <p>The main session routes each issue <b>by label</b>. A persona is a role <i>and</i> a limit.</p>
-  <div class="notes">The point is not having many agents; it is separating contexts and giving each only the power it needs. The architect cannot change code, so a design decision has to land as an ADR. Source: .claude/agents/*.md, WORKFLOW.md.</div>
+  <p>The main session routes each task <b>by label</b>. The independent reviewer is not one of the five: it is a fresh agent with a rubric.</p>
+  <div class="notes">The point is not having many agents: it is separating contexts and giving each only the power it needs. The architect cannot change code, so a design decision has to land as an ADR. Source: .claude/agents/*.md and WORKFLOW.md. Be ready for: do they really use these roles? At the start they were not delegated to at all (see the problems section).</div>
 </section>
 
 <section class="slide">
-  <div class="kicker">Project management</div>
-  <h2>Plain GitHub, plus one honest source of truth</h2>
+  <div class="kicker">Part C · how I work with AI</div>
+  <h2>Planning: issues, a backlog, milestones and decisions</h2>
   <ul>
-    <li><b>Issue = backlog item:</b> purpose, acceptance criteria, dependencies, priority, labels</li>
-    <li><b>Definition of Ready / Done</b>; Done includes the human reviewing and merging</li>
-    <li><b>Milestones M0–M17</b>, "ordered by goal, not a hard gate"</li>
-    <li><b>Org project board</b>, five columns: Inbox, Ready, In Progress, Review, Done</li>
-    <li>The real source of truth is <code>docs/roadmap/backlog.md</code>; the board mirrors it</li>
+    <li><b>GitHub issues and projects</b> track the work; <code>backlog.md</code> (186 items) is the written source of truth</li>
+    <li><b>Milestones M0 to M20</b>, ordered by goal, each item with acceptance criteria and dependencies</li>
+    <li><b>Definition of Ready and Done:</b> Done means merged <i>and</i> verified live</li>
+    <li><b>47 ADRs</b>: every non-trivial decision is written down, including the ones that were reversed</li>
   </ul>
-  <div class="notes">The Markdown backlog wins, the board is a mirror. That was not the design; it is what we learned (see the friction slide). Sources: .claude/PROJECT.md, docs/roadmap/milestones.md, project-board.md, ADR 0042.</div>
+  <div class="notes">Not Jira: GitHub issues and the org-level project board, plus a Markdown backlog that is the real source of truth (the board mirrors it; see ADR 0042 for why). Sources: .claude/PROJECT.md, docs/roadmap/milestones.md, docs/adr.</div>
 </section>
 
 <section class="slide">
-  <div class="kicker">Reviews</div>
+  <div class="kicker">Part C · how I work with AI</div>
   <h2>Reviews come in layers</h2>
-  <ul>
-    <li>A <b>persona agent</b> authors the change and opens a PR</li>
-    <li><b>Required CI</b> runs the mechanical checks</li>
-    <li>An <b>independent review</b> by a fresh agent, never the author, for platform-impacting changes</li>
-    <li><b>The owner reviews and merges</b></li>
+  <ol>
+    <li>An agent authors the change and opens a pull request</li>
+    <li><b>CI gates</b> run automatically (tests, schemas, security scan, drift checks)</li>
+    <li>An <b>independent agent</b> reviews platform-impacting changes, never the author</li>
+    <li><b>I review</b>; routine changes with green CI I sometimes let an agent review and merge to save my time</li>
     <li>Periodically, a <b>staff-level review</b> of the whole system</li>
-  </ul>
-  <p class="quote">"A second, unbiased read, not a rubber stamp from the same context that already talked itself into the approach."</p>
-  <div class="notes">The quote is literal from WORKFLOW.md, and it was written after the step was skipped on the first platform changes. Source: .claude/WORKFLOW.md.</div>
+  </ol>
+  <p class="quote">A second, unbiased read, not a rubber stamp from the same context that already talked itself into the approach.</p>
+  <div class="notes">Honest detail: the review happens in the terminal session, not as GitHub review objects: GitHub shows no formal reviews on the merged pull requests and requires zero approvals. That is on the gaps slide. The quote is from WORKFLOW.md and was written after the independent review was skipped on the first platform changes.</div>
 </section>
 
 <section class="slide">
-  <div class="kicker">Staff-level analysis</div>
-  <h2>An independent audit, on a schedule</h2>
+  <div class="kicker">Part C · how I work with AI</div>
+  <h2>Staff-level review, then a new backlog</h2>
   <table>
     <tr><th>Date</th><th>What it found</th></tr>
-    <tr><td>2026-08-06, 08-09</td><td>Drift between docs and reality; live access added</td></tr>
-    <tr><td>2026-08-11</td><td>"Never ship a component without its alert" violated for a whole class; rebuild had no whole-system acceptance criteria</td></tr>
+    <tr><td>2026-08-11</td><td>"Never ship a component without its alert" violated for a whole class; the rebuild had no whole-system acceptance criteria</td></tr>
     <tr><td>2026-08-15</td><td>A 33-hour alert nobody answered: build rate had outrun operate rate</td></tr>
-    <tr><td>2026-08-21</td><td>Full audit: untracked debt, prose-only rules, Claude Code features unused</td></tr>
-    <tr><td>2026-10-01</td><td>Agent loops: "adopt, narrowed"; human outer loop "unchanged, and load-bearing"</td></tr>
+    <tr><td>2026-08-21</td><td>Full audit: untracked debt, rules that were only prose, features unused</td></tr>
+    <tr><td>2026-10-01</td><td>Agent loops: adopt, narrowed; the human outer loop "unchanged, and load-bearing"</td></tr>
+    <tr><td>2026-10-09</td><td>A deployment left degraded by a merge-order gap; nothing would page if the cluster went dark. Became milestones M18 and M19</td></tr>
   </table>
-  <p class="mute">Rule: verify live, do not assume. Each review ends with a review of itself.</p>
-  <div class="notes">These are measured facts from the live cluster that became backlog items and ADRs, not generic advice. Sources: docs/reviews/*.md, docs/operations/2026-08-11-cycle-1-the-33-hour-incident.md.</div>
+  <p>Each review ends in new backlog items, and the loop starts again. <span class="mute">Eight reviews so far.</span></p>
+  <div class="notes">A fresh agent with a rubric, told to verify live and not assume. The latest was led by a stronger model that delegated evidence gathering to cheaper ones and drafting of backlog items to the cheapest. They are measured facts that became backlog items and ADRs. After that review I added one more milestone on top of its plan (M20, SLO dashboards): the human decides priority. Sources: docs/reviews/*.md.</div>
 </section>
 
 <section class="slide">
-  <div class="kicker">The human in the loop</div>
-  <h2>Where people sit</h2>
+  <div class="kicker">Part C · how I work with AI</div>
+  <h2>Where I sit in the loop</h2>
   <table>
-    <tr><th>The human decides</th><th>Example</th></tr>
-    <tr><td>Direction and priorities</td><td>the four objectives every review is graded against</td></tr>
-    <tr><td>Design trade-offs</td><td>the architect writes the ADR, the owner accepts it</td></tr>
-    <tr><td>What merges</td><td>every PR, however small</td></tr>
+    <tr><th>The human decides</th><th>Example from this project</th></tr>
+    <tr><td>Direction and priorities</td><td>I added the SLO dashboards milestone on top of a review's plan</td></tr>
+    <tr><td>Design trade-offs</td><td>the architect writes the ADR, I accept or reject it</td></tr>
+    <tr><td>What merges</td><td>every pull request, however small</td></tr>
     <tr><td>What touches the live system</td><td>a mutating <code>kubectl</code> needs explicit confirmation</td></tr>
-    <tr><td>Keep or kill</td><td>"keep Mimir", recorded as a decision</td></tr>
-    <tr><td>The physical world</td><td>a network cable, a router reservation</td></tr>
-    <tr><td><b>Answering the alert</b></td><td>the 33-hour incident</td></tr>
+    <tr><td>Keep or kill</td><td>keep Mimir, recorded as a decision</td></tr>
+    <tr><td><b>Noticing it is wrong</b></td><td>the first SLO dashboard showed no SLOs; I saw it, the agent had not</td></tr>
   </table>
-  <div class="notes">The human role is deciding, accepting accountability and acting in the physical world. Sources: WORKFLOW.md, backlog #135 and #162.</div>
+  <div class="notes">The human role is deciding, accepting accountability, and noticing when something plausible is wrong. Sources: WORKFLOW.md, backlog #135 and the SLO milestone.</div>
 </section>
 
 <section class="slide">
-  <div class="kicker">An experiment</div>
-  <h2>Bounded agent loops</h2>
+  <div class="kicker">Part C · how I work with AI</div>
+  <h2>An experiment: bounded agent loops</h2>
   <div class="cols">
-    <div class="card"><div class="big">1</div>iteration to green<br><span class="mute">$0.37, diff identical to the human PR</span></div>
-    <div class="card"><div class="big">8</div>preconditions<br><span class="mute">one of them: no <code>KUBECONFIG</code> in the loop</span></div>
+    <div class="card"><div class="big">1</div>iteration to green<br><span class="mute">$0.37, a diff identical to the human PR</span></div>
+    <div class="card"><div class="big">8</div>preconditions<br><span class="mute">one of them: no cluster credentials in the loop</span></div>
   </div>
   <ul>
-    <li>Verdict: <b>adopt, narrowed</b>, as a technique, not a working model</li>
-    <li>It converged in one step <i>because the task was fully specified</i>; $0.37 is a floor</li>
+    <li>Verdict: <b>adopt, narrowed</b>, as a technique, not as a working model</li>
+    <li>It converged in one step <i>because the task was fully specified</i></li>
     <li class="ok"><b>"The test went green" is never a merge criterion.</b></li>
   </ul>
-  <div class="notes">Tell it honestly, including the review's own critique: two agents agreeing shows the patch is the obvious one, not that it is correct. Sources: docs/reviews/2026-10-01-agentic-working-model-assessment.md, docs/runbooks/verified-agentic-loop.md, ADR 0046.</div>
+  <div class="notes">Tell it honestly, including the review's own critique: two agents agreeing shows the patch is the obvious one, not that it is correct. Sources: docs/reviews/2026-10-01-agentic-working-model-assessment.md, ADR 0046.</div>
 </section>
 
 <section class="slide">
-  <div class="kicker">Part B · what went wrong</div>
-  <h2>The agents did not follow the workflow</h2>
-  <img class="fig" src="problems-timeline.svg" alt="Timeline of problems and fixes">
-  <div class="notes">Set up the three-cause split on the next slide. Sources: commits 0975d44, 30f50c7, b135581; ADR 0042; docs/operations/2026-08-11-cycle-1-the-33-hour-incident.md.</div>
-</section>
-
-<section class="slide">
-  <div class="kicker">Three different causes</div>
-  <h2>Only the last one is about willpower</h2>
-  <ul>
-    <li><b>A configuration bug (Jul 18).</b> The persona files were prose only and "never ran": no frontmatter, so the Agent tool could not invoke them.</li>
-    <li><b>Convenience (Jul 19–24).</b> Design calls were made inline by the driving session instead of the architect; independent review "didn't happen" on the first platform changes.</li>
-    <li><b>Friction (Aug 15).</b> Personas "never delegated to through the mechanism"; of 146 board cards, <b>12</b> ever had a status.</li>
-  </ul>
-  <div class="notes">The first was our configuration error, not the AI disobeying. The second is the natural shortcut. The third is how any human team behaves.</div>
-</section>
-
-<section class="slide">
-  <div class="kicker">The lesson</div>
-  <p class="quote" style="font-size:1.6em">A process survives in proportion to how much friction it takes to skip it, not how well-reasoned it was when written down.</p>
-  <p class="mute">ADR 0042</p>
-  <ul>
-    <li>Review-before-merge survived because skipping it has consequences. The board did not, because skipping it costs nothing.</li>
-    <li>The fix was never "tell the agents harder". It was: <b>make the right thing the easy thing</b>.</li>
-  </ul>
-  <div class="notes">The central sentence of Part B, and it is from the project's own ADR.</div>
-</section>
-
-<section class="slide">
-  <div class="kicker">Gates are not proof</div>
-  <h2>Green is not correct</h2>
-  <ul>
-    <li><b>Cluster rebuild:</b> 35/35 scrape targets up, <code>cilium status OK</code>, and the system was broken in three places. The checks tested components, not the business path.</li>
-    <li><b>An alert that could never fire:</b> a <code>&gt;</code> between metrics with different labels. It passed review and CI; a live query found it.</li>
-    <li><b>Kafka heap:</b> every comment said "75% of the limit"; it was a percentage of the <i>host's</i> RAM. The broker kept getting OOM-killed until <code>jcmd</code> showed the real value.</li>
-    <li><b>"Done" that wasn't live:</b> a merge to a manual-sync Application changes nothing until someone syncs it.</li>
-  </ul>
-  <p class="mute">Some of these were the AI's own mistakes. That is the point: the weak spot is the process, not one model.</p>
-  <div class="notes">Sources: docs/reviews/2026-08-11 (4b.3), docs/SESSION_STATE.md, backlog #123, #142, #161.</div>
-</section>
-
-<section class="slide">
-  <div class="kicker">The thesis</div>
-  <h2>AI amplifies what is already there</h2>
-  <div class="cols">
-    <div class="card"><b class="ok">Amplified for the better</b><ul><li>ADRs, small single-concern PRs</li><li>tests written to fail first</li><li>536 merged PRs in 12 weeks</li><li>docs updated in the same PR</li></ul></div>
-    <div class="card"><b class="bad">Amplified for the worse</b><ul><li>decisions made inline, unreviewed</li><li>rules that exist only as prose</li><li>an alert nobody answers (33 h)</li><li>a board nobody maintains</li></ul></div>
-  </div>
-  <p>Building got cheap. What stayed scarce: <b>review, decisions, operation, accountability.</b></p>
-  <p class="mute">One project, one owner, no human-only baseline. An observation, not a benchmark.</p>
-  <div class="notes">Mark clearly that this is a single case, not a productivity measurement.</div>
-</section>
-
-<section class="slide">
-  <div class="kicker">My view</div>
-  <h2>The bottleneck is the human</h2>
-  <ul>
-    <li>Detection worked: 189 notifications delivered, zero failures. <b>The response was human</b>, up to 33 hours later.</li>
-    <li>This week's blockers were human or physical: a merge decision, a router reservation, which updates to accept, whether to keep a component.</li>
-    <li>Faster agents move the queue to the human; they don't remove it.</li>
-  </ul>
-  <div class="card"><b>Roles change, people stay.</b>
-    <ul><li><b>Dev:</b> less typing, more specifying, designing gates, reviewing</li>
-    <li><b>Ops:</b> less running things, more owning the signal and the response</li>
-    <li><b>New:</b> someone builds and maintains the guardrails</li>
-    <li>People remain for accountability, judgment under ambiguity, and the physical world</li></ul></div>
-  <div class="notes">This part is opinion; present it as such. The evidence is the staff reviews, the where-people-sit slide and the three causes. Source: the 33-hour incident write-up.</div>
-</section>
-
-<section class="slide">
-  <div class="kicker">Part C · gates and guardrails</div>
-  <h2>What we actually have</h2>
-  <img class="fig" src="gates-and-guardrails.svg" alt="Gates and guardrails by stage, with known gaps">
-  <div class="notes">Do not read the whole list. Pick one per layer and tell a story: the Trivy CVE gate, the hook that stops a kubectl delete without confirmation. Sources: each repo's ci workflow, WORKFLOW.md, verified-agentic-loop.md.</div>
-</section>
-
-<section class="slide">
-  <div class="kicker">Honest gaps · checked 2026-10-09</div>
-  <h2>What the gates don't cover</h2>
-  <ul>
-    <li>GitHub requires <b>0 approvals</b> in all four repos: "the human reviews" is a rule, not an enforcement</li>
-    <li><code>observability</code> has <b>no required status check</b></li>
-    <li><code>enforce_admins</code> is off everywhere</li>
-    <li>NetworkPolicies are not on every namespace yet (#126)</li>
-    <li>The confirmation hook is a speed bump for one operator, not a security boundary</li>
-    <li>A green gate can still mean a wrong system: the answer is business-path checks (#123)</li>
-  </ul>
-  <div class="notes">Showing the gaps makes the talk more credible than the gate list alone. Sources: gh api branches/main/protection, backlog #126 and #123.</div>
-</section>
-
-<section class="slide">
-  <div class="kicker">Part D · Demo</div>
+  <div class="kicker">Part D · demo</div>
   <h2>The infrastructure, on one screen</h2>
   <div class="split">
-    <img src="img/grafana-infrastructure-overview.png" alt="Grafana Infrastructure overview dashboard">
+    <img src="img/grafana-infrastructure-overview.png" alt="Grafana Infrastructure overview">
     <ul>
       <li><b>One mini PC:</b> CPU 7%, memory 20%, disk 20%, 51 pods running</li>
       <li><b>The Wi-Fi link</b> is on the dashboard: throughput and carrier drops</li>
       <li><b>GitOps state:</b> 46 apps synced, 47 healthy, 1 not healthy</li>
-      <li class="mute">Values at the time of the screenshot</li>
+      <li><span class="mute">Values at the time of the screenshot</span></li>
     </ul>
   </div>
-  <div class="notes">Grafana, "Infrastructure overview". Gauges turn amber at 70% and red at 90%. Point at the Wi-Fi panels: the cluster runs on a USB Wi-Fi dongle, so link drops are a first-class signal. The amber "apps out of sync / not healthy" tiles are real: one app is Degraded and one manual-sync app is intentionally out of sync. Source: the generator in platform/scripts/gen-slo-dashboards.py.</div>
+  <div class="notes">Grafana, Infrastructure overview. Gauges turn amber at 70% and red at 90%. The cluster runs on a USB Wi-Fi dongle, so link drops are a first-class signal. The amber tiles are real: one app is degraded and one manual-sync app is intentionally out of sync.</div>
 </section>
 
 <section class="slide">
-  <div class="kicker">Part D · Demo</div>
+  <div class="kicker">Part D · demo</div>
   <h2>The services: what is running and how loaded</h2>
   <div class="split">
-    <img src="img/grafana-services-overview.png" alt="Grafana Services overview dashboard">
+    <img src="img/grafana-services-overview.png" alt="Grafana Services overview">
     <ul>
-      <li><b>51 pods</b> running, none unready, none restarting at the moment this was taken</li>
+      <li><b>51 pods</b> running, none unready at the moment this was taken</li>
       <li><b>Memory against limits</b> per row: Kafka is the biggest consumer; Prometheus at 79% of its limit is the one to watch</li>
       <li>Requests and p95 latency per service underneath</li>
     </ul>
   </div>
-  <div class="notes">Grafana, "Services overview". The table in this capture groups by namespace; it has since been changed to one row per workload, so re-capture before presenting. Traffic is deliberately low (the applications exist to generate load and failure modes, not users), so the request panels are quiet.</div>
+  <div class="notes">Grafana, Services overview. This capture groups by namespace; the table has since become one row per workload, so re-capture before presenting. Traffic is deliberately low: the applications exist to generate load and failure modes.</div>
 </section>
 
 <section class="slide">
-  <div class="kicker">Part D · Demo</div>
+  <div class="kicker">Part D · demo</div>
   <h2>The network: who talks to whom</h2>
   <div class="split tall">
     <img src="img/hubble-namespace-api.png" alt="Hubble service map of the api namespace">
@@ -271,14 +264,14 @@
       <li><b>Inside the namespace:</b> the API, its PostgreSQL and its Redis</li>
       <li><b>Outside it:</b> Kafka, Pyroscope, the OpenTelemetry collector, Prometheus, Traefik</li>
       <li>A namespace is a <b>home</b>, not a service: the map shows traffic, not ownership</li>
-      <li class="mute">Cilium + Hubble (eBPF), network policies decide what is allowed</li>
+      <li><span class="mute">Cilium and Hubble (eBPF); network policies decide what is allowed</span></li>
     </ul>
   </div>
-  <div class="notes">Hubble UI shows one namespace at a time; the peers around it are other namespaces. The API is the right example because it has network policies (api, postgresql, redis and a Pyroscope-egress policy), so the picture matches what is allowed. 21 other namespaces have no policy yet (backlog #168). For the data flow of the market pipeline use the event-flows diagram; Hubble shows connections, not Kafka topics.</div>
+  <div class="notes">Hubble shows one namespace at a time; the peers around it are other namespaces. The API is the right example because it has network policies. 21 other namespaces have none yet (backlog #168). For the data flow of the market pipeline use the event-flows diagram.</div>
 </section>
 
 <section class="slide">
-  <div class="kicker">Part D · Demo</div>
+  <div class="kicker">Part D · demo</div>
   <h2>The product: a real ClinVar lookup</h2>
   <div class="split">
     <img src="img/clinvar-variant-explorer.png" alt="Clinical Variant Explorer showing rs80359550 in BRCA2">
@@ -288,21 +281,138 @@
       <li><b>Behind one click:</b> browser, API, cache, ClinVar service, database</li>
     </ul>
   </div>
-  <div class="notes">The viewer is a small front end over api's GET /variants/lookup. The ClinVar release id on the card is the one the cache entry was built from; when clinvar-service ingests a newer release it publishes an event and api deletes exactly the keys that changed. The product is a vehicle: it exists to make the platform do real work, not to be a product. Capture note: an unrelated browser tooltip was painted out of this screenshot.</div>
+  <div class="notes">A small front end over the API's variant lookup. The release id is the one the cache entry was built from; when a newer release is ingested an event tells the API which keys to delete. An unrelated browser tooltip was painted out of this screenshot.</div>
 </section>
 
 <section class="slide">
-  <div class="kicker">Part D · Demo</div>
+  <div class="kicker">Part D · demo</div>
   <h2>The market pipeline: prices and sentiment</h2>
   <div class="split">
-    <img src="img/market-sentiment-viewer.png" alt="Real-time market sentiment viewer with five tickers">
+    <img src="img/market-sentiment-viewer.png" alt="Real-time market sentiment viewer">
     <ul>
       <li><b>Two streams joined:</b> trades from a market feed and news sentiment, per ticker, in 15-minute windows</li>
       <li><b>Honest empty states:</b> one tick and +0.00% because this was captured on a Saturday, with the market closed</li>
       <li><b>Sentiment</b> is scored from news articles in the same window</li>
     </ul>
   </div>
-  <div class="notes">Aggregator joins the price ticks (market-data-ingestor) with sentiment scores (news-ingestor then sentiment-analyzer) over a tumbling window and the viewer reads GET /aggregates. The page itself says news and ticks are sparse outside trading hours and renders that honestly rather than as zero. To show movement, capture on a weekday during US market hours. Event flow diagram: docs/architecture/diagrams/event-flows.</div>
+  <div class="notes">The aggregator joins price ticks with sentiment scores over a tumbling window. The page says news and ticks are sparse outside trading hours and renders that honestly rather than as zero. To show movement capture on a weekday during US market hours.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part E · what went wrong</div>
+  <h2>The agents did not follow the workflow</h2>
+  <img class="fig" src="problems-timeline.svg" alt="Timeline of problems and fixes">
+  <div class="notes">Set up the three-cause split on the next slide. Sources: commits 0975d44, 30f50c7, b135581; ADR 0042; docs/operations/2026-08-11-cycle-1-the-33-hour-incident.md.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part E · what went wrong</div>
+  <h2>Three different causes</h2>
+  <ul>
+    <li><b>A configuration bug (Jul 18).</b> The agent files were prose only and never ran: no frontmatter, so the tool could not invoke them.</li>
+    <li><b>Convenience (Jul 19-24).</b> Design calls were made inline by the driving session instead of the architect; the independent review did not happen on the first platform changes.</li>
+    <li><b>Friction (Aug 15).</b> The agents were never delegated to through the mechanism; of 146 board cards, <b>12</b> ever had a status.</li>
+  </ul>
+  <div class="notes">The first was our configuration error, not the AI disobeying. The second is the natural shortcut. The third is how any human team behaves.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part E · what went wrong</div>
+  <h2>The lesson: friction decides what survives</h2>
+  <p class="quote" style="font-size:1.5em">A process survives in proportion to how much friction it takes to skip it, not how well-reasoned it was when written down.</p>
+  <p class="mute">ADR 0042</p>
+  <ul>
+    <li>Review before merge survived because skipping it has consequences. The board did not, because skipping it cost nothing.</li>
+    <li>The fix was never "tell the agents harder". It was: <b>make the right thing the easy thing</b>.</li>
+  </ul>
+  <div class="notes">The central sentence of this part, and it is from the project's own ADR.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part E · what went wrong</div>
+  <h2>Green is not correct</h2>
+  <ul>
+    <li><b>An alert that could never fire:</b> a comparison between metrics with different labels. It passed review and CI; a live query found it. Another is still dead today: its metric does not exist.</li>
+    <li><b>A dashboard with no SLOs:</b> an SLO is an indicator, an objective and a window. The first version showed only the indicator against an alert threshold. I noticed; the agent had not.</li>
+    <li><b>A heap sized from the wrong number:</b> every comment said a share of the container limit; it was a share of the host's RAM, until a profiler showed it.</li>
+    <li><b>After a rebuild,</b> every liveness check passed and the system was broken in three places: the checks tested components, not the business path.</li>
+  </ul>
+  <div class="notes">These support the thesis: the AI writes and reviews plausibly and the gates pass, but only measuring the real system finds the error. Include the agent's own mistakes: it shows the weak spot is the process, not one model. Sources: ADR 0020 addendum 2026-10-10, backlog #185, #161, docs/reviews/2026-08-11.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part E · what went wrong</div>
+  <h2>AI amplifies what is already there</h2>
+  <div class="cols">
+    <div class="card"><b class="ok">Amplified for the better</b><ul><li>ADRs, small single-concern pull requests</li><li>tests written to fail first</li><li>over 550 merged pull requests in 12 weeks</li><li>docs updated in the same change</li></ul></div>
+    <div class="card"><b class="bad">Amplified for the worse</b><ul><li>decisions made inline, unreviewed</li><li>rules that exist only as prose</li><li>an alert nobody answers (33 hours)</li><li>a board nobody maintains</li></ul></div>
+  </div>
+  <p>Building got cheap. What stayed scarce: <b>review, decisions, operation, accountability.</b></p>
+  <p class="mute">One project, one owner, no human-only baseline: an observation, not a benchmark.</p>
+  <div class="notes">Mark clearly that this is a single case, not a productivity measurement. The 33-hour alert is the 2026-08-11 incident: four alerts fired and nobody answered. Recompute the pull request count before presenting.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part E · what went wrong</div>
+  <h2>The bottleneck is the human (my view)</h2>
+  <ul>
+    <li>Detection worked: 189 notifications delivered, zero failures. <b>The response was human</b>, up to 33 hours later.</li>
+    <li>What blocked progress was human: a merge decision, which updates to accept, whether to keep a component.</li>
+    <li>Faster agents move the queue to the human; they do not remove it.</li>
+  </ul>
+  <div class="card"><b>Roles change, people stay.</b>
+    <ul><li><b>Developers:</b> less typing, more specifying, designing gates, reviewing</li>
+    <li><b>Operations:</b> less running things, more owning the signal and the response</li>
+    <li><b>New:</b> someone builds and maintains the guardrails</li></ul></div>
+  <div class="notes">This part is opinion; present it as such. The evidence is the staff reviews, the where-I-sit slide and the three causes. Source: the 33-hour incident write-up.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part F · gates and guardrails</div>
+  <h2>What we actually have</h2>
+  <img class="fig" src="gates-and-guardrails.svg" alt="Gates and guardrails by stage, with known gaps">
+  <div class="notes">Do not read the whole list. Pick one per layer and tell a story: the security scan in CI, the hook that stops a destructive kubectl without confirmation. Sources: each repository's CI workflow, WORKFLOW.md, verified-agentic-loop.md.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part F · gates and guardrails</div>
+  <h2>What the gates don't cover</h2>
+  <ul>
+    <li>GitHub requires <b>0 approvals</b> in all four repositories: "the human reviews" is a rule, not an enforcement</li>
+    <li><code>observability</code> has <b>no required status check</b>; <code>enforce_admins</code> is off everywhere</li>
+    <li>Network policies are not on every namespace yet</li>
+    <li>The cluster's uplink is a USB Wi-Fi dongle on DHCP: the weak link of the whole system</li>
+    <li>A green gate can still mean a wrong system: the answer is checks on the business path</li>
+  </ul>
+  <div class="notes">Showing the gaps makes the talk more credible than the gate list alone. Checked on 2026-10-09: gh api branches/main/protection in each repository. The dongle problem is backlog #162; the owner decided to keep the dongle, so the work is making the control plane tolerate the link.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part G · next steps</div>
+  <h2>Next: more nodes, and a mesh</h2>
+  <div class="cols">
+    <div class="card"><b>A second physical node</b><ul>
+      <li>The old laptop comes back as a worker</li>
+      <li>Unequal machines: stateless services go to the small one, heavy components stay on the big one</li>
+      <li>Opens experiments one node cannot do: node loss, draining, replicated storage</li></ul></div>
+    <div class="card"><b>A service mesh (Istio)</b><ul>
+      <li>Chaos experiments showed it: when Kafka or PostgreSQL went down, API threads hung for 30 to 60 seconds</li>
+      <li>One place to set timeouts and circuit breakers, for Java and Python alike</li>
+      <li>Encrypted, authenticated calls between services</li></ul></div>
+  </div>
+  <div class="notes">Second node: ADR 0047 (proposed): one server, one agent joined over Tailscale; the laptop is tainted and workloads opt in. A concrete assumption it will break: the CNI is configured to reach the API server at 127.0.0.1, which cannot work on a second node. Mesh: ADR 0024; the justification is the two chaos experiments in observability/chaos (Kafka producer blocking about 60 s, PostgreSQL connection acquisition about 30 s) and the plaintext in-cluster calls the project had already written down. Cilium keeps owning network policy; the mesh does not replace it. The friction of running both is part of what I want to learn. Do not give dates.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Part G · next steps</div>
+  <h2>Next: more SLOs, tuned, and a canary that reads them</h2>
+  <ul>
+    <li><b>More SLOs:</b> turn the declared-but-unmeasurable ones into measured ones (the variant lookup, ClinVar data freshness, the workers)</li>
+    <li><b>Fine-tune:</b> recalibrate objectives against a 28-day window, available from the end of October</li>
+    <li><b>An SLO-driven canary:</b> today a new version is checked on error rate and latency before it takes all traffic; next, gate it on the error budget</li>
+  </ul>
+  <p class="mute">The point of an SLO is a decision: deploy, hold or roll back.</p>
+  <div class="notes">Be precise: the canary exists and is proven in both directions, but its thresholds are the alert trip-points (5% errors, 500 ms p95), not the new objectives; the failure we induced was a readiness failure, not an SLO breach. The next step reads slo:error_budget_remaining. An induced SLO-failure drill would make the claim fully true. Sources: platform kubernetes/api/analysistemplate.yaml, ADR 0020 addendum, backlog #136, #137, #183-#185.</div>
 </section>
 
 <section class="slide">
