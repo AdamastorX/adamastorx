@@ -2,11 +2,11 @@
 
 Slides are in `slides.html` (English; arrow keys, `N` for speaker notes, `F` fullscreen). Open it from this folder so the images load. The speaker notes carry the sources. Audience: engineering students, some senior developers and professors.
 
-## Structure (30 slides)
+## Structure (31 slides)
 
 | Part | Slides |
 |---|---|
-| Opening | title |
+| Opening | cover: project name, title, author (`img/cover.jpg`) |
 | A. The lab | a homelab from old hardware; one node per machine, not VMs; the setup (Tailscale, hosts file, ingress); moving to real hardware (**draft: check with the owner**) |
 | B. The project | four repositories, one cluster; real workloads to produce real problems |
 | C. How I work with AI | the loop; five agents with different powers; planning (issues, backlog, milestones, ADRs); reviews in layers; staff-level review then a new backlog; where I sit; bounded agent loops |
@@ -15,6 +15,7 @@ Slides are in `slides.html` (English; arrow keys, `N` for speaker notes, `F` ful
 | F. Gates and guardrails | what we have; what they don't cover |
 | G. Next steps | a second node and a service mesh; more SLOs, tuned, and an SLO-driven canary |
 | Takeaways | three things to take home |
+| Close | thank you, contact details |
 
 Diagrams in this folder: `access-setup`, `repos-and-cluster`, `ai-development-loop`, `problems-timeline`, `gates-and-guardrails`. Screenshots in `img/`.
 

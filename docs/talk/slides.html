@@ -31,6 +31,15 @@
   .split img { width:100%; max-height:78vh; object-fit:contain; border-radius:10px; background:#0b1220; align-self:center; justify-self:center; }
   .split.tall img { width:auto; max-width:100%; }
   @media (max-width:800px) { .split, .split.tall { grid-template-columns:1fr; } }
+  .cover { background:linear-gradient(180deg,#0f172a00 35%,#0f172aee 82%),url(img/cover.jpg) center/cover no-repeat; justify-content:flex-end; padding-bottom:7vh; }
+  .cover h1 { font-size:4.2em; letter-spacing:.02em; }
+  .cover .sub { font-size:1.35em; margin:0; }
+  .cover .who { font-size:.8em; color:var(--mute); margin:.6em 0 0; }
+  .cover .who b { color:var(--fg); }
+  .thanks { background:linear-gradient(180deg,#0f172ad9,#0f172af2),url(img/cover.jpg) center/cover no-repeat; align-items:flex-start; }
+  .thanks h1 { font-size:3.6em; }
+  .thanks .contact { font-size:1.05em; line-height:1.9; }
+  .thanks .contact span { color:var(--acc); display:inline-block; min-width:5.5em; font-size:.8em; text-transform:uppercase; letter-spacing:.1em; font-weight:700; }
   .notes { display:none; position:fixed; left:0; right:0; bottom:0; max-height:34vh; overflow:auto;
     background:#020617f2; border-top:2px solid var(--acc); padding:1em 6vw; font-size:.7em; color:#cbd5e1; z-index:5; }
   body.showNotes .notes.on { display:block; }
@@ -40,11 +49,12 @@
 </head>
 <body>
 
-<section class="slide">
-  <div class="kicker">AdamastorX · a homelab on old hardware</div>
-  <h1>Building a platform with AI agents:<br>what worked, what broke</h1>
+<section class="slide cover">
+  <h1>AdamastorX</h1>
+  <p class="sub">Building a platform with AI agents: what worked, what broke</p>
   <p class="mute">One person, four repositories, one small Kubernetes cluster, twelve weeks.</p>
-  <div class="notes">Audience: engineering students, some senior developers and professors. Everything here is one project with one owner: an observation, not a benchmark. Every number on the slides has a source in the repository; the file docs/talk/slides-ai-development-loop.md lists them.</div>
+  <p class="who"><b>Luís Peixoto</b> · FanDuel (Blip) · lmpeixoto.com</p>
+  <div class="notes">Introduce yourself in one line: name, where you work (FanDuel, Blip), and that this is a personal project, not a company one. Audience: engineering students, some senior developers and professors. Everything here is one project with one owner: an observation, not a benchmark. Every number on the slides has a source in the repository; the file docs/talk/slides-ai-development-loop.md lists them.</div>
 </section>
 
 <section class="slide">
@@ -428,6 +438,19 @@
 </section>
 
 <div class="hud"><span id="pos"></span> · ← → navigate · N notes · F fullscreen</div>
+
+<section class="slide thanks">
+  <h1>Thank you</h1>
+  <p class="sub mute">Questions?</p>
+  <div class="contact">
+    <div><span>Name</span>Luís Peixoto</div>
+    <div><span>Email</span>lmpeixoto@gmail.com</div>
+    <div><span>Work</span>FanDuel (Blip)</div>
+    <div><span>Blog</span>lmpeixoto.com</div>
+  </div>
+  <p class="mute">AdamastorX · one owner · one system · twelve weeks · no control group</p>
+  <div class="notes">Thank the audience, leave this slide up during questions. The four repositories are described in the talk; offer to share the links on request.</div>
+</section>
 
 <script>
 (function () {
