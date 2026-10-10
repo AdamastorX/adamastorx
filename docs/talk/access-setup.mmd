@@ -1,0 +1,33 @@
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'Helvetica, Arial, sans-serif', 'fontSize': '22px', 'lineColor': '#475569', 'primaryTextColor': '#0f172a'}, 'flowchart': {'curve': 'basis', 'nodeSpacing': 36, 'rankSpacing': 90, 'htmlLabels': true, 'padding': 18}}}%%
+flowchart LR
+
+  subgraph ANY["Anywhere: home, university, a train"]
+    direction TB
+    LAP["Any laptop or PC<br/>browser · kubectl"]
+    HOSTS["/etc/hosts<br/>11 names point to the<br/>cluster's Tailscale address"]
+    LAP ~~~ HOSTS
+  end
+
+  subgraph NET["Tailscale"]
+    TS(["Private network<br/>nothing open to<br/>the internet"])
+  end
+
+  subgraph HOST["The cluster: one ThinkPad laptop"]
+    direction TB
+    API["Kubernetes API<br/>port 6443<br/>used by kubectl"]
+    TRF["Traefik ingress<br/>ports 80 and 443<br/>routes by name"]
+    UIS["Web UIs<br/>argocd · grafana · prometheus<br/>alertmanager · hubble · service UIs"]
+    CA["Internal certificate authority<br/>HTTPS for every name"]
+    API ~~~ TRF
+    TRF --> UIS
+    CA -.->|"certificates"| TRF
+  end
+
+  ANY ==>|"https and kubectl"| NET ==> HOST
+
+  classDef dev fill:#fed7aa,stroke:#ea580c,color:#431407,stroke-width:3px
+  classDef net fill:#dcfce7,stroke:#16a34a,color:#052e16,stroke-width:3px
+  classDef host fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
+  class LAP,HOSTS dev
+  class TS net
+  class API,TRF,UIS,CA host

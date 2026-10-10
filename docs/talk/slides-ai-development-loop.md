@@ -279,3 +279,14 @@ and SLOs, Alertmanager to a phone.
 - The loop experiment is one run; the review of it is scheduled for five runs or 2026-12-01.
 - Several of the problems above were found by *independent reviews and live measurement*, which is the same human-plus-
   agent loop being described, not something the agents did unprompted.
+
+---
+
+# Part D: demo (screenshots, added 2026-10-10)
+
+Three slides in `slides.html` (before the takeaways), images in `img/`:
+
+- **The infrastructure, on one screen**: Grafana "Infrastructure overview" (CPU/memory/disk gauges, the Wi-Fi link panels, ArgoCD counts).
+- **The services: what is running and how loaded**: Grafana "Services overview". This capture groups by namespace; the table has since become one row per workload, so re-capture before presenting.
+- **The network: who talks to whom**: Hubble, namespace `api` (API, PostgreSQL, Redis inside; Kafka, Pyroscope, OpenTelemetry collector, Prometheus, Traefik outside).
+
