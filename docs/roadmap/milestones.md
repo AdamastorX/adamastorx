@@ -185,7 +185,7 @@ Two owner decisions frame what follows: the NucBox stays on its USB Wi-Fi
 dongle, and the T460s becomes the second node. **M18 goes first**, and #163
 (the Degraded `api` Rollout) goes first within it, alone. **M19 does not
 start until #163 and #165 are Done**: a second node on a cluster that can
-go dark for a month unnoticed doubles what can go dark. Within M19 the
+go dark unnoticed doubles what can go dark. Within M19 the
 order is strict: #171 → #172 and #173 → #174 → #175/#176, then #51 and #52,
 whose dependency on the superseded #48 now points at #174. The relaxed
 sequencing rule above still applies to everything else.

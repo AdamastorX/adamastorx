@@ -147,7 +147,7 @@ the PreToolUse guard, platform#202, and the plugin lists described here are not 
 enabled in `adamastorx` and `services` only; not `platform` or `observability`. Backlog items #149/#150/#151
 AC updated per the decision. New item #158 created for `check-resource-limits.sh` repair (self-test fixtures,
 all-workload-kind glob, header corrected). Operator connectivity finding (resolved by
-2026-10-03, see the pickup section above): NucBox offline 33 days, Tailscale node key expired post-cutover;
+2026-10-03, see the pickup section above): NucBox offline 33 days (a deliberate power-off by the owner, confirmed 2026-10-10), Tailscale node key expired post-cutover;
 /etc/hosts wrong IP; no kubeconfig on this Mac.
 
 **Backlog #49 (Cilium/Hubble, replacing flannel) and #50 (first
